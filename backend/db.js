@@ -113,7 +113,7 @@ export function initDb() {
     CREATE TABLE IF NOT EXISTS orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tipo TEXT NOT NULL CHECK(tipo IN ('delivery','retirada')),
-      status TEXT NOT NULL DEFAULT 'recebido' CHECK(status IN ('recebido','em_producao','pronto','saiu_entrega','entregue','cancelado')),
+      status TEXT NOT NULL DEFAULT 'recebido' CHECK(status IN ('aguardando_pagamento','recebido','em_producao','pronto','saiu_entrega','entregue','cancelado')),
       cliente_nome TEXT NOT NULL,
       cliente_telefone TEXT NOT NULL,
       cliente_email TEXT,
@@ -125,6 +125,13 @@ export function initDb() {
       observacoes TEXT,
       valor_total REAL NOT NULL,
       comanda_id INTEGER,
+      forma_pagamento TEXT,
+      motivo_cancelamento TEXT,
+      payment_status TEXT,
+      mp_payment_id TEXT,
+      pix_qr_code TEXT,
+      pix_qr_code_base64 TEXT,
+      pix_expira_em TEXT,
       created_at TEXT DEFAULT (datetime('now','localtime')),
       updated_at TEXT DEFAULT (datetime('now','localtime')),
       FOREIGN KEY (comanda_id) REFERENCES comandas(id)
@@ -136,6 +143,9 @@ export function initDb() {
       quantity INTEGER NOT NULL DEFAULT 1,
       unit_price REAL NOT NULL,
       observations TEXT,
+      prato_feito_espetinho_id INTEGER,
+      extra_caramelized_onion INTEGER DEFAULT 0,
+      extra_hamburger INTEGER DEFAULT 0,
       FOREIGN KEY (order_id) REFERENCES orders(id),
       FOREIGN KEY (item_id) REFERENCES items(id)
     );
@@ -144,10 +154,93 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
   `);
 
-  const orderCols = ['forma_pagamento TEXT', 'motivo_cancelamento TEXT'];
+  // Migração: orders.status precisa aceitar 'aguardando_pagamento' (PIX automático),
+  // mas SQLite não permite ALTER de CHECK — recria a tabela quando necessário.
+  try {
+    const ordersSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='orders'").get();
+    if (ordersSchema?.sql && !ordersSchema.sql.includes('aguardando_pagamento')) {
+      db.pragma('foreign_keys = OFF');
+      // Sem isso, "ALTER TABLE orders RENAME" reescreve o FOREIGN KEY de order_items
+      // para apontar para "orders_old" (nome temporário), quebrando a referência depois
+      // que a tabela "orders" nova é recriada com o mesmo nome original.
+      db.pragma('legacy_alter_table = ON');
+      const rebuild = db.transaction(() => {
+        db.exec(`
+          ALTER TABLE orders RENAME TO orders_old;
+          CREATE TABLE orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT NOT NULL CHECK(tipo IN ('delivery','retirada')),
+            status TEXT NOT NULL DEFAULT 'recebido' CHECK(status IN ('aguardando_pagamento','recebido','em_producao','pronto','saiu_entrega','entregue','cancelado')),
+            cliente_nome TEXT NOT NULL,
+            cliente_telefone TEXT NOT NULL,
+            cliente_email TEXT,
+            endereco_rua TEXT,
+            endereco_numero TEXT,
+            endereco_complemento TEXT,
+            endereco_bairro TEXT,
+            endereco_referencia TEXT,
+            observacoes TEXT,
+            valor_total REAL NOT NULL,
+            comanda_id INTEGER,
+            forma_pagamento TEXT,
+            motivo_cancelamento TEXT,
+            payment_status TEXT,
+            mp_payment_id TEXT,
+            pix_qr_code TEXT,
+            pix_qr_code_base64 TEXT,
+            pix_expira_em TEXT,
+            created_at TEXT DEFAULT (datetime('now','localtime')),
+            updated_at TEXT DEFAULT (datetime('now','localtime')),
+            FOREIGN KEY (comanda_id) REFERENCES comandas(id)
+          );
+          INSERT INTO orders (id, tipo, status, cliente_nome, cliente_telefone, cliente_email,
+            endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_referencia,
+            observacoes, valor_total, comanda_id, forma_pagamento, motivo_cancelamento, created_at, updated_at)
+          SELECT id, tipo, status, cliente_nome, cliente_telefone, cliente_email,
+            endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_referencia,
+            observacoes, valor_total, comanda_id, forma_pagamento, motivo_cancelamento, created_at, updated_at
+          FROM orders_old;
+          DROP TABLE orders_old;
+          CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+          CREATE INDEX IF NOT EXISTS idx_orders_comanda ON orders(comanda_id);
+        `);
+      });
+      try {
+        rebuild();
+      } finally {
+        db.pragma('legacy_alter_table = OFF');
+        db.pragma('foreign_keys = ON');
+      }
+    }
+  } catch (e) {
+    console.error('Migração orders (aguardando_pagamento) falhou:', e.message);
+  }
+
+  const orderCols = [
+    'forma_pagamento TEXT',
+    'motivo_cancelamento TEXT',
+    'payment_status TEXT',
+    'mp_payment_id TEXT',
+    'pix_qr_code TEXT',
+    'pix_qr_code_base64 TEXT',
+    'pix_expira_em TEXT'
+  ];
   for (const col of orderCols) {
     try {
       db.exec(`ALTER TABLE orders ADD COLUMN ${col}`);
+    } catch (e) {
+      if (!e.message || !e.message.includes('duplicate column')) throw e;
+    }
+  }
+
+  const orderItemCols = [
+    'prato_feito_espetinho_id INTEGER',
+    'extra_caramelized_onion INTEGER DEFAULT 0',
+    'extra_hamburger INTEGER DEFAULT 0'
+  ];
+  for (const col of orderItemCols) {
+    try {
+      db.exec(`ALTER TABLE order_items ADD COLUMN ${col}`);
     } catch (e) {
       if (!e.message || !e.message.includes('duplicate column')) throw e;
     }

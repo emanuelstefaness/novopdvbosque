@@ -23,12 +23,14 @@ export function stepsForTipo(tipo) {
 export function tituloAcompanhamento(status) {
   if (status === 'cancelado') return 'Pedido cancelado'
   if (status === 'entregue') return 'Pedido concluído!'
+  if (status === 'aguardando_pagamento') return 'Pague com PIX'
   return 'Acompanhe seu pedido'
 }
 
 /** Subtítulo curto do status atual */
 export function subtituloStatusCliente(status, tipo) {
   if (status === 'cancelado') return 'Infelizmente não conseguimos atender este pedido.'
+  if (status === 'aguardando_pagamento') return 'Aguardando confirmação do pagamento PIX.'
   if (status === 'entregue') {
     return tipo === 'delivery' ? 'Seu pedido foi entregue.' : 'Retirada concluída no balcão.'
   }

@@ -4,6 +4,7 @@ import { getPedidoSector } from '../itemSector.js';
 import { resolveLancheAddonsFromBody } from '../lancheAddons.js';
 import { getTaxaEntregaDelivery, entregaGratisAtiva } from '../deliveryFee.js';
 import { isPedidosOnlineAtivo, statusPedidosOnline, MENSAGEM_ONLINE_FECHADO } from '../onlineSystem.js';
+import { createPixPayment, getPaymentStatus, cancelPayment } from '../mercadoPago.js';
 
 export const publicRouter = Router();
 const getDb = (req) => req.app.get('db');
@@ -31,6 +32,111 @@ function orderComItens(db, order) {
     ORDER BY oi.id
   `).all(order.id);
   return { ...order, items };
+}
+
+// Cria os pedidos/fila por setor (cozinha, grill, bar) para os itens de um pedido.
+// Usado tanto no despacho imediato (pagamento não-PIX) quanto na confirmação tardia do PIX.
+function dispatchItemsToSectors(db, comandaId, items) {
+  const insPedido = db.prepare(`
+    INSERT INTO pedidos (comanda_id, item_id, quantity, unit_price, observations, prato_feito_espetinho_id, extra_caramelized_onion, extra_hamburger, sector)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insStatus = db.prepare('INSERT OR REPLACE INTO pedido_sector_status (pedido_id, sector, status) VALUES (?, ?, ?)');
+
+  for (const row of items) {
+    const item = db.prepare(`
+      SELECT i.*, c.slug AS category_slug
+      FROM items i
+      LEFT JOIN categories c ON c.id = i.category_id
+      WHERE i.id = ?
+    `).get(row.item_id);
+    const sector = item ? getPedidoSector(item) : null;
+    const r = insPedido.run(
+      comandaId,
+      row.item_id,
+      row.quantity,
+      row.unit_price,
+      row.observations,
+      row.prato_feito_espetinho_id || null,
+      row.extra_caramelized_onion ?? 0,
+      row.extra_hamburger ?? 0,
+      sector
+    );
+    const pedidoId = r.lastInsertRowid;
+    if (sector) insStatus.run(pedidoId, sector, 'pending');
+    if (item && item.is_grill && item.is_kitchen && sector === 'kitchen') insStatus.run(pedidoId, 'grill', 'pending');
+    if (item && item.is_grill && item.is_kitchen && sector === 'grill') insStatus.run(pedidoId, 'kitchen', 'pending');
+  }
+}
+
+// Confirma o pagamento PIX de um pedido: libera para a cozinha/PDV e avisa via socket.
+function confirmarPagamentoPix(db, order) {
+  const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+  const run = db.transaction(() => {
+    db.prepare(`
+      UPDATE orders SET status = 'recebido', payment_status = 'aprovado', updated_at = datetime('now','localtime')
+      WHERE id = ?
+    `).run(order.id);
+    db.prepare(`
+      UPDATE comandas SET status = 'ordering', updated_at = datetime('now','localtime')
+      WHERE id = ?
+    `).run(order.comanda_id);
+    dispatchItemsToSectors(db, order.comanda_id, items.map((it) => ({
+      item_id: it.item_id,
+      quantity: it.quantity,
+      unit_price: it.unit_price,
+      observations: it.observations,
+      prato_feito_espetinho_id: it.prato_feito_espetinho_id,
+      extra_caramelized_onion: it.extra_caramelized_onion,
+      extra_hamburger: it.extra_hamburger,
+    })));
+  });
+  run();
+  broadcastAll('pedidos', {});
+  broadcastAll('comandas', {});
+  broadcastAll('novo-pedido-online', {
+    orderId: order.id,
+    comandaId: order.comanda_id,
+    tipo: order.tipo,
+    cliente_nome: order.cliente_nome,
+    cliente_telefone: order.cliente_telefone,
+    valor_total: order.valor_total,
+  });
+}
+
+// Enquanto o pedido está aguardando PIX, consulta o Mercado Pago a cada vez que o
+// cliente/PDV busca o pedido (reaproveita o polling já existente da tela de acompanhamento).
+async function refreshPixIfNeeded(db, order) {
+  if (!order || order.forma_pagamento !== 'pix' || order.status !== 'aguardando_pagamento' || !order.mp_payment_id) {
+    return order;
+  }
+  try {
+    const expiraEm = order.pix_expira_em ? new Date(order.pix_expira_em).getTime() : null;
+    if (expiraEm && Date.now() > expiraEm) {
+      await cancelPayment(order.mp_payment_id);
+      db.prepare(`
+        UPDATE orders SET status = 'cancelado', payment_status = 'expirado', motivo_cancelamento = ?, updated_at = datetime('now','localtime')
+        WHERE id = ?
+      `).run('Tempo para pagamento via PIX expirou. Faça um novo pedido.', order.id);
+      return db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+    }
+    const { status } = await getPaymentStatus(order.mp_payment_id);
+    if (status === 'aprovado') {
+      confirmarPagamentoPix(db, order);
+      return db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+    }
+    if (status === 'rejeitado' || status === 'cancelado') {
+      db.prepare(`
+        UPDATE orders SET status = 'cancelado', payment_status = ?, motivo_cancelamento = ?, updated_at = datetime('now','localtime')
+        WHERE id = ?
+      `).run(status, 'Pagamento PIX não aprovado.', order.id);
+      return db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+    }
+    return order;
+  } catch (e) {
+    console.warn('Falha ao consultar status PIX no Mercado Pago:', e.message);
+    return order;
+  }
 }
 
 // Diagnóstico: confirma que a API pública está no ar
@@ -68,7 +174,7 @@ publicRouter.get('/menu', (req, res) => {
 });
 
 // Criar pedido online → cria order, comanda (id 201+), pedidos; emite alerta
-publicRouter.post('/orders', (req, res) => {
+publicRouter.post('/orders', async (req, res) => {
   try {
   if (!isPedidosOnlineAtivo()) {
     return res.status(503).json({ error: MENSAGEM_ONLINE_FECHADO });
@@ -184,6 +290,10 @@ publicRouter.post('/orders', (req, res) => {
     valorTotal += getTaxaEntregaDelivery();
   }
 
+  const isPix = formaPg === 'pix';
+  const orderStatusInicial = isPix ? 'aguardando_pagamento' : 'recebido';
+  const comandaStatusInicial = isPix ? 'aguardando_pagamento' : 'ordering';
+
   const run = db.transaction(() => {
     const nextId = db.prepare('SELECT COALESCE(MAX(id), 200) + 1 AS next FROM comandas WHERE id >= 200').get();
     const comandaId = nextId.next;
@@ -192,10 +302,11 @@ publicRouter.post('/orders', (req, res) => {
     const orderInfo = db.prepare(`
       INSERT INTO orders (tipo, status, cliente_nome, cliente_telefone, cliente_email, observacoes,
         endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_referencia, valor_total, forma_pagamento, comanda_id)
-      VALUES (?, 'recebido', ?, ?, ?, ?,
+      VALUES (?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?, NULL)
     `).run(
       tipo,
+      orderStatusInicial,
       nome,
       telefone,
       cliente_email ? String(cliente_email).trim() : null,
@@ -213,11 +324,12 @@ publicRouter.post('/orders', (req, res) => {
     db.prepare(`
       INSERT INTO comandas (id, mesa, status, origin_order_id, tipo_online, cliente_nome, cliente_telefone, cliente_email,
         endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_referencia)
-      VALUES (?, ?, 'ordering', ?, ?, ?, ?, ?,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?)
     `).run(
       comandaId,
       `Online #${orderId}`,
+      comandaStatusInicial,
       orderId,
       tipo,
       nome,
@@ -232,59 +344,79 @@ publicRouter.post('/orders', (req, res) => {
 
     db.prepare('UPDATE orders SET comanda_id = ? WHERE id = ?').run(comandaId, orderId);
 
-    const insOrderItem = db.prepare('INSERT INTO order_items (order_id, item_id, quantity, unit_price, observations) VALUES (?, ?, ?, ?, ?)');
-    const insPedido = db.prepare(`
-      INSERT INTO pedidos (comanda_id, item_id, quantity, unit_price, observations, prato_feito_espetinho_id, extra_caramelized_onion, extra_hamburger, sector)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    const insOrderItem = db.prepare(`
+      INSERT INTO order_items (order_id, item_id, quantity, unit_price, observations, prato_feito_espetinho_id, extra_caramelized_onion, extra_hamburger)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const insStatus = db.prepare('INSERT OR REPLACE INTO pedido_sector_status (pedido_id, sector, status) VALUES (?, ?, ?)');
-
     for (const row of validItems) {
-      insOrderItem.run(orderId, row.item_id, row.quantity, row.unit_price, row.observations);
-      const item = db.prepare(`
-        SELECT i.*, c.slug AS category_slug
-        FROM items i
-        LEFT JOIN categories c ON c.id = i.category_id
-        WHERE i.id = ?
-      `).get(row.item_id);
-      const sector = item ? getPedidoSector(item) : null;
-      const r = insPedido.run(
-        comandaId,
+      insOrderItem.run(
+        orderId,
         row.item_id,
         row.quantity,
         row.unit_price,
         row.observations,
         row.prato_feito_espetinho_id || null,
         row.extra_caramelized_onion ?? 0,
-        row.extra_hamburger ?? 0,
-        sector
+        row.extra_hamburger ?? 0
       );
-      const pedidoId = r.lastInsertRowid;
-      if (sector) insStatus.run(pedidoId, sector, 'pending');
-      if (item && item.is_grill && item.is_kitchen && sector === 'kitchen') insStatus.run(pedidoId, 'grill', 'pending');
-      if (item && item.is_grill && item.is_kitchen && sector === 'grill') insStatus.run(pedidoId, 'kitchen', 'pending');
+    }
+
+    if (!isPix) {
+      dispatchItemsToSectors(db, comandaId, validItems);
     }
 
     return { orderId, comandaId };
   });
 
   const { orderId, comandaId } = run();
-  broadcastAll('pedidos', {});
-  broadcastAll('comandas', {});
-  broadcastAll('novo-pedido-online', {
-    orderId,
-    comandaId,
-    tipo,
-    cliente_nome: nome,
-    cliente_telefone: telefone,
-    valor_total: valorTotal
-  });
+
+  let pixIndisponivel = false;
+  if (isPix) {
+    try {
+      const pix = await createPixPayment({
+        orderId,
+        valorTotal,
+        nome,
+        email: cliente_email ? String(cliente_email).trim() : null,
+      });
+      db.prepare(`
+        UPDATE orders SET mp_payment_id = ?, pix_qr_code = ?, pix_qr_code_base64 = ?, pix_expira_em = ?, payment_status = 'pendente', updated_at = datetime('now','localtime')
+        WHERE id = ?
+      `).run(pix.paymentId, pix.qrCode, pix.qrCodeBase64, pix.expiraEm, orderId);
+    } catch (err) {
+      console.error('Erro ao criar cobrança PIX no Mercado Pago:', err.message);
+      pixIndisponivel = true;
+      const fallback = db.transaction(() => {
+        db.prepare("UPDATE orders SET status = 'recebido', updated_at = datetime('now','localtime') WHERE id = ?").run(orderId);
+        db.prepare("UPDATE comandas SET status = 'ordering', updated_at = datetime('now','localtime') WHERE id = ?").run(comandaId);
+        dispatchItemsToSectors(db, comandaId, validItems);
+      });
+      fallback();
+    }
+  }
+
+  if (!isPix || pixIndisponivel) {
+    broadcastAll('pedidos', {});
+    broadcastAll('comandas', {});
+    broadcastAll('novo-pedido-online', {
+      orderId,
+      comandaId,
+      tipo,
+      cliente_nome: nome,
+      cliente_telefone: telefone,
+      valor_total: valorTotal
+    });
+  }
 
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  let message = tipo === 'retirada' ? 'Seu pedido estará disponível para retirada no balcão.' : 'Pedido recebido.';
+  if (isPix && !pixIndisponivel) message = 'Pague com PIX para confirmar seu pedido.';
+  else if (isPix && pixIndisponivel) message = 'Não foi possível gerar o PIX automático agora — combine o pagamento com o atendente.';
   res.status(201).json({
     ...orderComItens(db, order),
     comanda_id: comandaId,
-    message: tipo === 'retirada' ? 'Seu pedido estará disponível para retirada no balcão.' : 'Pedido recebido.'
+    pix_indisponivel: pixIndisponivel || undefined,
+    message
   });
   } catch (err) {
     console.error('Erro ao criar pedido online:', err);
@@ -293,7 +425,7 @@ publicRouter.post('/orders', (req, res) => {
 });
 
 // Último pedido do cliente (acompanhamento só com telefone)
-publicRouter.get('/orders/ultimo', (req, res) => {
+publicRouter.get('/orders/ultimo', async (req, res) => {
   const db = getDb(req);
   const telReq = normalizeTelefone(req.query.telefone);
   if (!telReq || telReq.length < 8) {
@@ -302,21 +434,22 @@ publicRouter.get('/orders/ultimo', (req, res) => {
   const recentes = db.prepare(`
     SELECT * FROM orders ORDER BY id DESC LIMIT 300
   `).all();
-  const order = recentes.find((o) => telefoneConfere(o.cliente_telefone, telReq));
+  let order = recentes.find((o) => telefoneConfere(o.cliente_telefone, telReq));
   if (!order) {
     return res.status(404).json({ error: 'Nenhum pedido encontrado para este telefone' });
   }
+  order = await refreshPixIfNeeded(db, order);
   res.json(orderComItens(db, order));
 });
 
 // Status do pedido (cliente consulta acompanhamento)
-publicRouter.get('/orders/:id', (req, res) => {
+publicRouter.get('/orders/:id', async (req, res) => {
   const db = getDb(req);
   const id = Number(req.params.id);
   if (!Number.isFinite(id) || id < 1) {
     return res.status(400).json({ error: 'Pedido inválido' });
   }
-  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+  let order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
   if (!order) return res.status(404).json({ error: 'Pedido não encontrado' });
 
   const telReq = normalizeTelefone(req.query.telefone);
@@ -325,5 +458,6 @@ publicRouter.get('/orders/:id', (req, res) => {
     return res.status(403).json({ error: 'Telefone não confere com este pedido' });
   }
 
+  order = await refreshPixIfNeeded(db, order);
   res.json(orderComItens(db, order));
 });

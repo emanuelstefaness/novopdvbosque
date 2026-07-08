@@ -24,7 +24,18 @@ export default function PedidoOnlineAcompanhamento({
   const [order, setOrder] = useState(initialOrder)
   const [pollError, setPollError] = useState(null)
   const [loading, setLoading] = useState(!initialOrder || !orderTemItens(initialOrder))
+  const [pixCopiado, setPixCopiado] = useState(false)
   const orderRef = useRef(order)
+
+  const handleCopiarPix = async () => {
+    try {
+      await navigator.clipboard.writeText(order?.pix_qr_code || '')
+      setPixCopiado(true)
+      setTimeout(() => setPixCopiado(false), 2500)
+    } catch {
+      // clipboard indisponível: o campo de texto abaixo já permite selecionar e copiar manualmente
+    }
+  }
 
   useEffect(() => {
     orderRef.current = order
@@ -115,6 +126,7 @@ export default function PedidoOnlineAcompanhamento({
   const tipo = order.tipo === 'delivery' ? 'delivery' : 'retirada'
   const st = order.status || 'recebido'
   const steps = stepsForTipo(tipo)
+  const aguardandoPagamento = st === 'aguardando_pagamento'
   const aguardandoConfirmacao = st === 'recebido'
   const found = steps.findIndex((s) => s.status === st)
   const curIdx =
@@ -161,6 +173,55 @@ export default function PedidoOnlineAcompanhamento({
 
         <p className="mt-4 text-xl font-bold text-slate-900">Total: {formatPrice(order.valor_total)}</p>
 
+        {aguardandoPagamento && (
+          <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-left">
+            <div className="flex items-start gap-3">
+              <span className="relative mt-0.5 flex h-3 w-3 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-sky-500" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-sky-950">Escaneie o QR Code ou copie o código PIX</p>
+                <p className="mt-1 text-sm leading-relaxed text-sky-900">
+                  Assim que o pagamento for confirmado, seu pedido é enviado automaticamente para a cozinha.
+                </p>
+              </div>
+            </div>
+
+            {order.pix_qr_code_base64 ? (
+              <div className="mt-4 flex justify-center">
+                <img
+                  src={`data:image/png;base64,${order.pix_qr_code_base64}`}
+                  alt="QR Code PIX"
+                  className="h-52 w-52 rounded-xl border border-sky-200 bg-white p-2"
+                />
+              </div>
+            ) : (
+              <p className="mt-4 text-center text-sm text-sky-800">Gerando seu PIX…</p>
+            )}
+
+            {order.pix_qr_code && (
+              <div className="mt-4">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-sky-700">PIX copia e cola</p>
+                <textarea
+                  readOnly
+                  value={order.pix_qr_code}
+                  onFocus={(e) => e.target.select()}
+                  rows={3}
+                  className="w-full resize-none rounded-lg border border-sky-200 bg-white p-2 text-xs text-slate-700"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopiarPix}
+                  className="mt-2 w-full rounded-xl bg-sky-600 py-2.5 text-sm font-bold text-white"
+                >
+                  {pixCopiado ? 'Código copiado!' : 'Copiar código PIX'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {aguardandoConfirmacao && (
           <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left">
             <div className="flex items-start gap-3">
@@ -178,13 +239,13 @@ export default function PedidoOnlineAcompanhamento({
           </div>
         )}
 
-        {!cancelado && !aguardandoConfirmacao && (
+        {!cancelado && !aguardandoConfirmacao && !aguardandoPagamento && (
           <p className="mt-2 text-base font-medium text-[hsl(var(--menu-primary))]">
             {subtituloStatusCliente(st, tipo)}
           </p>
         )}
 
-        {order.message && !cancelado && !aguardandoConfirmacao && (
+        {order.message && !cancelado && !aguardandoConfirmacao && !aguardandoPagamento && (
           <p className="mt-2 text-sm text-slate-600">{order.message}</p>
         )}
 
@@ -201,6 +262,17 @@ export default function PedidoOnlineAcompanhamento({
           <div className="mt-6 text-left">
             <p className="mb-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">Andamento</p>
             <ol className="space-y-0">
+              {aguardandoPagamento && (
+                <li className="relative flex gap-3 border-l-2 border-sky-400 py-2 pl-4">
+                  <span className="absolute -left-[9px] top-3 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-sky-500 text-[10px] font-bold text-white">
+                    …
+                  </span>
+                  <div>
+                    <p className="text-sm font-bold text-sky-700">Aguardando pagamento PIX</p>
+                    <p className="text-xs text-slate-600">Assim que o PIX for confirmado, seguimos com seu pedido.</p>
+                  </div>
+                </li>
+              )}
               {aguardandoConfirmacao && (
                 <li className="relative flex gap-3 border-l-2 border-amber-400 py-2 pl-4">
                   <span className="absolute -left-[9px] top-3 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
@@ -213,9 +285,9 @@ export default function PedidoOnlineAcompanhamento({
                 </li>
               )}
               {steps.map((s, i) => {
-                const passed = !aguardandoConfirmacao && i < curIdx
-                const current = !aguardandoConfirmacao && i === curIdx && st === s.status
-                const pending = aguardandoConfirmacao || i > curIdx
+                const passed = !aguardandoConfirmacao && !aguardandoPagamento && i < curIdx
+                const current = !aguardandoConfirmacao && !aguardandoPagamento && i === curIdx && st === s.status
+                const pending = aguardandoConfirmacao || aguardandoPagamento || i > curIdx
                 return (
                   <li
                     key={s.status}

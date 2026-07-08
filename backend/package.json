@@ -5,9 +5,9 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
+    "start": "node --env-file-if-exists=.env server.js",
     "seed": "node seed.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch --env-file-if-exists=.env server.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.10.1",

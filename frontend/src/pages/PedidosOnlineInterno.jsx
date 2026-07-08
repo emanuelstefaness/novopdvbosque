@@ -4,6 +4,7 @@ import { useSocket } from '../socket'
 import { buildPedidoOnlinePrintHtml, formatFormaPagamentoLabel, openComandaPrintWindow } from '../utils/comandaImpressao'
 
 const STATUS_LABEL = {
+  aguardando_pagamento: 'Aguardando pagamento (PIX)',
   recebido: 'Recebido',
   em_producao: 'Em produção',
   pronto: 'Pronto',

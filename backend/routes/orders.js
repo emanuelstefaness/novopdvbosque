@@ -17,7 +17,7 @@ ordersRouter.get('/', (req, res) => {
   if (tipo && ['delivery', 'retirada'].includes(tipo)) {
     list = list.filter((r) => r.tipo === tipo);
   }
-  if (status && ['recebido', 'em_producao', 'pronto', 'saiu_entrega', 'entregue', 'cancelado'].includes(status)) {
+  if (status && ['aguardando_pagamento', 'recebido', 'em_producao', 'pronto', 'saiu_entrega', 'entregue', 'cancelado'].includes(status)) {
     list = list.filter((r) => r.status === status);
   }
   const withItems = list.map((order) => {
@@ -38,7 +38,7 @@ ordersRouter.patch('/:id/status', (req, res) => {
   const db = getDb(req);
   const id = Number(req.params.id);
   const { status, motivo_cancelamento } = req.body || {};
-  const valid = ['recebido', 'em_producao', 'pronto', 'saiu_entrega', 'entregue', 'cancelado'];
+  const valid = ['aguardando_pagamento', 'recebido', 'em_producao', 'pronto', 'saiu_entrega', 'entregue', 'cancelado'];
   if (!valid.includes(status)) return res.status(400).json({ error: 'Status inválido' });
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
   if (!order) return res.status(404).json({ error: 'Pedido não encontrado' });
