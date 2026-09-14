@@ -5,7 +5,7 @@ export function setIo(io) {
 }
 
 export function broadcastAll(event, data) {
-  if (ioInstance) ioInstance.emit(event, data);
+  if (ioInstance) { if(event==='novo-pedido-online') ioInstance.to('caixa').emit(event,data); else ioInstance.emit(event,data); }
 }
 
 export function broadcastToRoom(room, event, data) {

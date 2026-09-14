@@ -5,6 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 // Build apenas do app de pedidos online (para deploy).
 // O PDV completo (caixa, cozinha, etc.) roda localmente com npm run dev / npm run build.
 export default defineConfig({
+  define: { 'import.meta.env.VITE_PUBLIC_ONLY': 'true' },
   plugins: [react(), tailwindcss()],
   build: {
     outDir: 'dist-pedir',

@@ -11,7 +11,7 @@ export default function TvCozinha() {
     setList(data)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { const initial=setTimeout(()=>void load(),0); return()=>clearTimeout(initial) }, [])
   useSocket(() => load())
 
   return (

@@ -1,193 +1,238 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { getComandas, openComanda } from '../api'
-import { useSocket } from '../socket'
-import { useWaiter } from '../context/WaiterContext'
-
-const statusClass = {
-  closed: 'card-status-closed',
-  open: 'card-status-open',
-  ordering: 'card-status-ordering',
-  paying: 'card-status-paying',
-  closed_green: 'card-status-closed-green',
-}
-
-/** Em andamento na lista do garçom: só contas realmente abertas (não confiar só em pedidos antigos) */
-const GARCOM_OPEN = ['open', 'ordering', 'paying']
-
-function comandaEmAndamentoNaLista(c) {
-  if (!c) return false
-  if (c.closed_at) return false
-  const st = String(c.status || '').toLowerCase().trim()
-  return GARCOM_OPEN.includes(st)
-}
-
-function comandaFechadaParaReabrir(c) {
-  if (!c) return true
-  if (c.closed_at) return true
-  const st = String(c.status || '').toLowerCase().trim()
-  return st === 'closed'
-}
-
-function cardStatusVisual(c) {
-  const stRaw = String(c.status || 'closed').toLowerCase().trim()
-  if (c.closed_at && GARCOM_OPEN.includes(stRaw)) {
-    return c.mesa ? 'closed_green' : 'closed'
-  }
-  if (stRaw === 'closed' && c.mesa) return 'closed_green'
-  return stRaw
-}
-
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { getComandas, openComanda } from "../api";
+import { useSocket } from "../socket";
+import {useWaiter} from "../context/useWaiter";
+import Icon from "../components/Icon";
+const open = (c) =>
+  c && !c.closed_at && ["open", "ordering", "paying"].includes(c.status);
+const labels = {
+  open: "Aberta",
+  ordering: "Em atendimento",
+  paying: "Pagamento",
+  closed: "Disponível",
+};
 export default function Garcons() {
-  const navigate = useNavigate()
-  const { waiter } = useWaiter()
-  const [comandas, setComandas] = useState({})
-  const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState(null) // { id, mesa }
-
-  const refresh = async () => {
+  const navigate = useNavigate(),
+    { waiter } = useWaiter();
+  const [data, setData] = useState({}),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [filter, setFilter] = useState("ativas"),
+    [search, setSearch] = useState(""),
+    [modal, setModal] = useState(null),
+    [mesa, setMesa] = useState(""),
+    [saving, setSaving] = useState(false);
+  const load = async () => {
     try {
-      const data = await getComandas()
-      setComandas(data)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { refresh() }, [])
-  useSocket(() => refresh())
-
-  const handleCard = (id, comanda) => {
-    const c = comandas[id] || { id, status: 'closed', mesa: null }
-    if (comandaEmAndamentoNaLista(c)) {
-      navigate(`/garcons/${id}/pedidos`)
-      return
-    }
-    if (comandaFechadaParaReabrir(c) && !c.mesa) {
-      setModal({ id })
-      return
-    }
-    if (comandaFechadaParaReabrir(c) && c.mesa) {
-      setModal({ id, mesa: c.mesa })
-      return
-    }
-    setModal({ id })
-  }
-
-  const submitMesa = async () => {
-    const input = document.querySelector('input[placeholder="Número da mesa"]')
-    const mesa = input?.value?.trim()
-    if (!mesa) return
-    const id = modal.id
-    try {
-      await openComanda(id, mesa, waiter?.id ?? null)
-      setModal(null)
-      await refresh()
-      navigate(`/garcons/${id}/pedidos`)
+      setData(await getComandas());
+      setError("");
     } catch (e) {
-      alert(e.message)
+      setError(e.message);
+    } finally {
+      setLoading(false);
     }
-  }
-
-  if (loading) return <div className="flex min-h-[50vh] items-center justify-center p-4 text-slate-500">Carregando...</div>
-
-  if (!waiter) {
-    return null
-  }
-
-  const emAndamento = Array.from({ length: 200 }, (_, i) => i + 1).filter((id) =>
-    comandaEmAndamentoNaLista(comandas[id])
-  )
-  const livres = Array.from({ length: 200 }, (_, i) => i + 1).filter(
-    (id) => !comandaEmAndamentoNaLista(comandas[id])
-  )
-
-  const goToMesa = (e) => {
-    const v = e.target?.value?.trim()
-    const n = parseInt(v, 10)
-    if (v && !Number.isNaN(n) && n >= 1 && n <= 200) handleCard(n, comandas[n] || { id: n, status: 'closed', mesa: null })
-  }
-
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  useSocket(() => void load());
+  const all = Array.from(
+      { length: 200 },
+      (_, i) => data[i + 1] || { id: i + 1, status: "closed" },
+    ),
+    active = all.filter(open);
+  const choose = (c) => {
+    if (open(c)) {
+      navigate(`/garcons/${c.id}/pedidos`);
+      return;
+    }
+    setMesa(c.mesa || "");
+    setModal(c);
+  };
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!mesa.trim() || saving) return;
+    setSaving(true);
+    try {
+      await openComanda(modal.id, mesa.trim(), waiter?.id ?? null);
+      navigate(`/garcons/${modal.id}/pedidos`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const visible = all.filter(
+    (c) =>
+      (filter === "todas" || (filter === "ativas" ? open(c) : !open(c))) &&
+      (!search ||
+        String(c.id).includes(search) ||
+        String(c.mesa || "").includes(search)),
+  );
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-        <input
-          type="text"
-          inputMode="numeric"
-          placeholder="Digite o nº da mesa/comanda..."
-          className="w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-          onKeyDown={(e) => e.key === 'Enter' && goToMesa(e)}
-        />
-      </div>
-
-      {emAndamento.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Pedidos em andamento ({emAndamento.length})
-          </h2>
-          <div className="grid grid-cols-3 gap-3 sm:flex sm:flex-wrap sm:gap-2">
-            {emAndamento.map((id) => {
-              const c = comandas[id] || { id, status: 'open', mesa: null }
-              const cls = statusClass[cardStatusVisual(c)] || statusClass.closed
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => handleCard(id, c)}
-                  className={`flex min-h-[4.75rem] min-w-0 flex-col items-center justify-center rounded-xl text-white shadow-md transition active:scale-95 sm:min-h-[3.5rem] sm:min-w-[4rem] ${cls}`}
-                >
-                  <span className="text-lg font-bold sm:text-base">{id}</span>
-                  {c.mesa && <span className="text-xs opacity-90">Mesa {c.mesa}</span>}
-                </button>
-              )
-            })}
-          </div>
-        </section>
-      )}
-
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Mesas / Comandas livres ({livres.length})
-        </h2>
-        <div className="grid grid-cols-4 gap-3 sm:grid-cols-5 sm:gap-2 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12">
-          {livres.map((id) => {
-            const c = comandas[id] || { id, status: 'closed', mesa: null }
-            const cls = statusClass[cardStatusVisual(c)] || statusClass.closed
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => handleCard(id, c)}
-                className={`flex min-h-[4.25rem] min-w-0 flex-col items-center justify-center rounded-xl text-white shadow transition active:scale-95 sm:min-h-[3rem] sm:rounded-lg ${cls}`}
-              >
-                <span className="text-base font-bold sm:text-sm">{id}</span>
-                {c.mesa && <span className="text-[10px] opacity-80">Mesa {c.mesa}</span>}
-              </button>
-            )
-          })}
+    <div>
+      <header className="page-heading">
+        <div>
+          {waiter.isCaixa && <span className="eyebrow">ATENDIMENTO</span>}
+          <h1>Mesas e comandas</h1>
+          {waiter.isCaixa && <p>O salão organizado. Do primeiro pedido ao fechamento.</p>}
         </div>
-      </section>
-
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            const c = all.find((c) => !open(c));
+            if (c) choose(c);
+          }}
+          disabled={active.length === 200}
+        >
+          <Icon name="plus" size={18} />
+          Abrir comanda
+        </button>
+      </header>
+      <div className="work-toolbar">
+        <div className="segmented">
+          {[
+            ["ativas", "Em atendimento", active.length],
+            ["livres", "Disponíveis", 200 - active.length],
+            ["todas", "Todas", 200],
+          ].map(([key, label, n]) => (
+            <button
+              key={key}
+              className={filter === key ? "selected" : ""}
+              onClick={() => setFilter(key)}
+            >
+              {label}
+              <span className="count">{n}</span>
+            </button>
+          ))}
+        </div>
+        <label className="search-field">
+          <Icon name="search" size={18} />
+          <input
+            placeholder="Buscar mesa ou comanda"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </label>
+        <button className="icon-button" onClick={load} aria-label="Atualizar">
+          <Icon name="refresh" size={18} />
+        </button>
+      </div>
+      {error && (
+        <p className="error-banner" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="table-legend">
+        <span>
+          <i className="status-dot green" />
+          Em atendimento
+        </span>
+        <span>
+          <i className="status-dot amber" />
+          Pagamento
+        </span>
+        <span>
+          <i className="status-dot gray" />
+          Disponível
+        </span>
+      </div>
+      {loading ? (
+        <div className="empty-panel">Carregando comandas…</div>
+      ) : (
+        <div className="comanda-grid">
+          {visible.map((c) => (
+            <button
+              className={`comanda-tile ${open(c) ? c.status : "closed"}`}
+              key={c.id}
+              onClick={() => choose(c)}
+            >
+              <div className="tile-top">
+                <Icon name="receipt" size={19} />
+                <span className="tile-status">
+                  <i />
+                  {labels[open(c) ? c.status : "closed"]}
+                </span>
+              </div>
+              <div className="tile-number">{String(c.id).padStart(2, "0")}</div>
+              <div className="tile-bottom">
+                <span>{open(c) ? `Mesa ${c.mesa}` : "Abrir atendimento"}</span>
+                {open(c) ? (
+                  <strong>
+                    {Number(c.total_pedidos || 0).toLocaleString("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    })}
+                  </strong>
+                ) : (
+                  <Icon name="plus" size={17} />
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      {!loading && !visible.length && (
+        <div className="empty-panel">
+          <Icon name="receipt" size={34} />
+          <h2>
+            {search
+              ? "Nenhuma comanda encontrada"
+              : "Nenhuma comanda em atendimento"}
+          </h2>
+          <p>
+            {search
+              ? "Tente outro número de mesa ou comanda."
+              : "Use “Abrir comanda” para iniciar uma nova mesa."}
+          </p>
+        </div>
+      )}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-            <h2 className="mb-2 text-lg font-semibold text-slate-800">Comanda {modal.id}</h2>
-            <p className="mb-4 text-sm text-slate-500">Informe o número da mesa</p>
-            <input
-              type="text"
-              placeholder="Número da mesa"
-              defaultValue={modal.mesa}
-              className="mb-4 w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-lg text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-              onKeyDown={(e) => e.key === 'Enter' && submitMesa()}
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <button type="button" className="btn btn-secondary flex-1" onClick={() => setModal(null)}>Cancelar</button>
-              <button type="button" className="btn btn-primary flex-1" onClick={submitMesa}>Abrir</button>
+        <div className="dialog-backdrop">
+          <form className="dialog-card" onSubmit={submit}>
+            <div className="dialog-title">
+              <h2>Abrir comanda {modal.id}</h2>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setModal(null)}
+                aria-label="Fechar"
+              >
+                <Icon name="close" />
+              </button>
             </div>
-          </div>
+            <p>Informe a mesa deste atendimento.</p>
+            <label className="field-label">
+              Número da mesa
+              <input
+                autoFocus
+                required
+                value={mesa}
+                onChange={(e) => setMesa(e.target.value)}
+                placeholder="Ex.: 12"
+              />
+            </label>
+            {error && <p className="error-banner">{error}</p>}
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setModal(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={saving}
+              >
+                {saving ? "Abrindo…" : "Abrir e lançar pedidos"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
-  )
+  );
 }

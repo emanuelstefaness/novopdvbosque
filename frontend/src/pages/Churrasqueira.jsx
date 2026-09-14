@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { getPedidosGrill, getProductionGrill, markPedidoChurrasqueiraReady } from '../api'
 import { useSocket } from '../socket'
-import PedidoElapsed, { earliestCreatedAt } from '../components/PedidoElapsed'
+import PedidoElapsed from '../components/PedidoElapsed'
+import {earliestCreatedAt} from '../utils/pedidoTime'
 import { churrasqueiraComandaColumnClass, comandaOnlineLabel, isTipoPedidoOnline, pedidoOnlineBannerModel } from '../utils/comandaOnlineVisual'
 import { observacaoParaProducao } from '../utils/productionObservations'
 import { textoResumoAddonsPedido } from '../utils/lancheAddons'
@@ -77,8 +78,11 @@ function normalizePratoFeitoSummary(pf) {
 
 export default function Churrasqueira() {
   const [list, setList] = useState([])
+  const [busy,setBusy]=useState(false)
+  const [error,setError]=useState('')
+  const busyRef=useRef(false)
   const [production, setProduction] = useState({ byItem: [], pratoFeito: null })
-  const [totalMinimized, setTotalMinimized] = useState(false)
+  const [totalMinimized, setTotalMinimized] = useState(()=>window.matchMedia("(max-width: 600px)").matches)
 
   const load = async () => {
     const [pedidos, prod] = await Promise.all([getPedidosGrill(), getProductionGrill()])
@@ -90,14 +94,13 @@ export default function Churrasqueira() {
   }
 
   const loadTimeoutRef = useRef(null)
-  useEffect(() => { load(); return () => { if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current) } }, [])
+  useEffect(() => { const initial=setTimeout(()=>void load(),0); return () => { clearTimeout(initial); if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current) } }, [])
   useSocket(() => {
     if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current)
     loadTimeoutRef.current = setTimeout(() => { load(); loadTimeoutRef.current = null }, 400)
   })
 
   const cards = useMemo(() => groupByComanda(list), [list])
-  const totalCards = cards.length
 
   const subtractFromProduction = (itemsToRemove) => {
     const byKey = {}
@@ -139,7 +142,8 @@ export default function Churrasqueira() {
   }
 
   const setCardAllReady = async (items) => {
-    if (items.length === 0) return
+    if (items.length === 0 || busyRef.current) return
+    busyRef.current=true;setBusy(true);setError('')
     const ids = new Set(items.map((i) => i.id))
     subtractFromProduction(items)
     setList((prev) => prev.filter((p) => !ids.has(p.id)))
@@ -147,38 +151,36 @@ export default function Churrasqueira() {
       await Promise.all(items.map((p) => markPedidoChurrasqueiraReady(p.id)))
       if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current)
       loadTimeoutRef.current = setTimeout(() => { load(); loadTimeoutRef.current = null }, 150)
-    } catch {
-      load()
-    }
+    } catch(e) {
+      setError(e.message);load()
+    } finally {busyRef.current=false;setBusy(false)}
   }
 
   const markOneReady = async (pedidos) => {
-    const one = pedidos.find((p) => !Number(p.is_side)) ?? pedidos[0]
-    if (!one) return
-    subtractFromProduction([one])
-    setList((prev) => prev.filter((p) => p.id !== one.id))
-    try {
-      await markPedidoChurrasqueiraReady(one.id)
-      load()
-    } catch {
-      load()
-    }
+    const one=pedidos.find(p=>!Number(p.is_side))??pedidos[0]
+    if(!one||busyRef.current)return
+    busyRef.current=true;setBusy(true);setError('')
+    try { await markPedidoChurrasqueiraReady(one.id,true); await load() }
+    catch(e){setError(e.message);await load()}
+    finally{busyRef.current=false;setBusy(false)}
   }
 
   const productionGrouped = useMemo(() => groupProductionByItem(production.byItem), [production.byItem])
 
   return (
     <div className="relative flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-gradient-to-br from-stone-200 via-amber-100/90 to-amber-50">
-      <div className={`flex min-h-0 flex-1 flex-col overflow-hidden px-1 transition-[padding] sm:px-2 ${totalMinimized ? 'pr-0' : 'pr-52'}`}>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-1 transition-[padding] sm:px-2" style={{ paddingRight: totalMinimized ? 0 : '13rem' }}>
         <div className="mb-3 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 px-1">
           <h1 className="text-xl font-bold text-amber-900/90">Churrasqueira</h1>
+      <p className="production-subtitle">Pedidos organizados por comanda e prioridade de preparo.</p>
           <span
             className="rounded-full border border-amber-300/80 bg-amber-100/90 px-2.5 py-0.5 text-sm font-semibold text-amber-950 shadow-sm tabular-nums"
             title="Total de cards de comanda na fila"
           >
-            {totalCards} {totalCards === 1 ? 'comanda na fila' : 'comandas na fila'}
+            {cards.length} {cards.length === 1 ? 'comanda na fila' : 'comandas na fila'}
           </span>
         </div>
+        {error&&<p className="error-banner" role="alert">{error}</p>}
         <div className="flex min-h-0 flex-1 flex-row gap-4 overflow-x-auto overflow-y-auto pb-3">
         {cards.map((card) => {
           const tipoOn = card.items[0]?.comanda_tipo_online
@@ -186,6 +188,8 @@ export default function Churrasqueira() {
           return (
           <div
             key={card.comanda_id}
+            role="region"
+            aria-label={`Produção da comanda ${card.comanda_id}`}
             className={churrasqueiraComandaColumnClass(tipoOn)}
           >
             {colBanner && (
@@ -197,7 +201,7 @@ export default function Churrasqueira() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className={`text-base font-bold ${tipoOn === 'delivery' ? 'text-sky-800' : tipoOn === 'retirada' ? 'text-teal-900' : 'text-amber-700'}`}>
-                  Comanda {card.comanda_id} — Mesa {card.mesa}
+                  Comanda {card.items[0]?.production_number || card.comanda_id}{card.items[0]?.production_number ? " (paga)" : ""} — Mesa {card.mesa}
                 </span>
                 {isTipoPedidoOnline(tipoOn) && (
                   <span className="ml-2 inline-block rounded-full bg-violet-200/90 px-2 py-0.5 text-[10px] font-black uppercase text-violet-900">
@@ -217,6 +221,7 @@ export default function Churrasqueira() {
               <button
                 type="button"
                 className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-green-500"
+                disabled={busy}
                 onClick={() => setCardAllReady(card.items)}
               >
                 Tudo pronto
@@ -242,12 +247,14 @@ export default function Churrasqueira() {
                     </span>
                   </span>
                   <div className="flex shrink-0 items-center gap-1">
-                    {g.pedidos.length > 1 && (
+                    {g.total > 1 && (
                       <button
                         type="button"
                         className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-300 text-sm font-bold text-slate-800 hover:bg-slate-400"
                         onClick={() => markOneReady(g.pedidos)}
-                        title="Menos 1 (entregue)"
+                        title="Dar pronto em 1 unidade"
+                        aria-label={`Dar pronto em 1 unidade de ${g.displayBase}`}
+                        disabled={busy}
                       >
                         −
                       </button>
@@ -255,9 +262,10 @@ export default function Churrasqueira() {
                     <button
                       type="button"
                       className="rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-500"
+                      disabled={busy}
                       onClick={() => setCardAllReady(g.pedidos)}
                     >
-                      Pronto
+                      {g.total>1?'Todos prontos':'Pronto'}
                     </button>
                   </div>
                 </li>
@@ -330,3 +338,5 @@ export default function Churrasqueira() {
     </div>
   )
 }
+
+

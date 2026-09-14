@@ -54,6 +54,7 @@ ordersRouter.patch('/:id/status', (req, res) => {
       WHERE id = ?
     `).run(status, id);
   }
+  if (status === 'entregue') db.prepare("UPDATE orders SET delivered_at=COALESCE(delivered_at,datetime('now','localtime')) WHERE id=?").run(id);
   broadcastAll('orders', {});
   broadcastAll('comandas', {});
   res.json({ id, status });

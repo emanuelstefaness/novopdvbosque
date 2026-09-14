@@ -1,0 +1,98 @@
+/* Operational status and touch targets shared by the internal POS. */
+.payment-backdrop { position: fixed; inset: 0; z-index: 90; background: #142b3b99; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.payment-dialog { width: 720px; max-width: 100%; max-height: calc(100dvh - 40px); display: flex; flex-direction: column; background: white; border-radius: 10px; box-shadow: 0 20px 60px #142b3b44; overflow: hidden; }
+.payment-dialog > header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid #dde5ea; flex-shrink: 0; gap: 16px; }
+.payment-dialog h2 { font-size: 22px; margin: 3px 0; }
+.payment-dialog h3 { font-size: 15px; font-weight: 650; margin: 20px 0 10px; }
+.payment-dialog small,.payment-body > p { color: #627785; font-size: 12px; }
+.payment-body { padding: 0 24px 24px; overflow-y: auto; min-height: 0; }
+.payment-body input,.payment-body select { min-height: 44px; padding: 9px; border: 1px solid #cbd7df; border-radius: 5px; max-width: 100%; }
+.payment-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #edf1f4; font-size: 13px; }
+.payment-item > span:first-child { flex: 1; }.payment-item small { display: block; margin-top: 3px; }.payment-item input { width: 85px; }
+.payment-breakdown { display: flex; flex-wrap: wrap; gap: 12px; padding: 16px 0; font-size: 13px; }.payment-breakdown strong { width: 100%; font-size: 18px; }
+.payment-split { display: flex; align-items: center; gap: 12px; margin: 14px 0; flex-wrap: wrap; font-size: 13px; }.payment-split input { width: 65px; }
+.payment-tender { display: flex; gap: 10px; margin: 12px 0; }.payment-tender select,.payment-tender input { min-width: 0; flex: 1; width: 100%; }
+.payment-dialog > footer { padding: 18px 24px; background: #f3f7f9; border-top: 1px solid #d5e0e6; flex-shrink: 0; }.payment-dialog > footer > div { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 12px; font-size: 14px; }.payment-dialog > footer > button { width: 100%; }
+@media(max-width:600px){.payment-backdrop { padding: 8px; }.payment-dialog { max-height: calc(100dvh - 16px); }.payment-body { padding: 0 16px 16px; }.payment-dialog > header,.payment-dialog > footer { padding: 14px 16px; }.payment-item { flex-wrap: wrap; }.payment-item > small { width: 100%; }}
+.establishment-logo { display: block; object-fit: contain; flex-shrink: 0; border-radius: 0; }
+.pdv-app .app-brand { justify-content: center; padding: 12px 0; }
+.sidebar-logo { width: 144px; height: 126px; }
+.login-brand .login-logo { width: 190px; height: 166px; }
+.login-page .login-brand { justify-content: center; margin-bottom: 20px; }
+.pdv-app {
+  --status-green: #237653;
+  --status-green-bg: #edf7f0;
+  --status-amber: #865b13;
+  --status-amber-bg: #fff6e3;
+  --status-red: #b53b39;
+  --control-border: #cdd8e0;
+}
+.pdv-app .btn, .pdv-app .icon-button { min-height: 44px; }
+.pdv-app .icon-button { min-width: 44px; }
+.pdv-app button:disabled { opacity: .55; cursor: wait; }
+.pdv-app button:focus-visible, .pdv-app input:focus-visible,
+.pdv-app select:focus-visible, .pdv-app summary:focus-visible {
+  outline: 3px solid #26877c; outline-offset: 3px;
+}
+.pdv-app .page-heading h1, .pdv-app .register-heading h1,
+.pdv-app .ledger-heading h1 { letter-spacing: -.6px; font-size: 28px; }
+.pdv-app .state-badge.amber { color: var(--status-amber); background: var(--status-amber-bg); }
+.pdv-app .state-badge.green { color: var(--status-green); background: var(--status-green-bg); }
+.operation-feedback { padding: 10px 14px; margin-bottom: 14px; border-left: 3px solid #237653; background: #edf7f0; color: #237653; font-size: 13px; }
+.pdv-app .cash-comanda.occupied {
+  background: var(--status-amber-bg); border-color: #e5ce9c; color: var(--status-amber);
+  border-left: 4px solid #c28b29; padding: 17px; min-height: 142px;
+}
+.pdv-app .cash-comanda.occupied:hover { background: #ffefcd; border-color: #bf8b31; }
+.pdv-app .cash-comanda.awaiting { background: #fff0d0; border-left-color: #946017; }
+.pdv-app .cash-comanda.available { background: var(--status-green-bg); color: var(--status-green); border-color: #c7dfd0; }
+.pdv-app .cash-comanda.available:hover { background: #deefe4; border-color: #74a88a; }
+.pdv-app .cash-comanda.available .cash-comanda-number { color: var(--status-green); }
+.cash-comanda-number { font-size: 32px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.cash-comanda-status { font-size: 12px; font-weight: 600; }
+.cash-comanda-bottom { font-size: 13px; }
+.cash-comanda-bottom b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.cash-grid-legend i.occupied { background: #c28b29; }
+.cash-grid-legend i.awaiting { background: #946017; }
+.cash-grid-legend i.available { background: #237653; }
+.pdv-app .account-modal { display: flex; flex-direction: column; overflow: hidden; }
+.account-modal .register-receipt-heading, .account-modal .register-settlement { flex: 0 0 auto; }
+.account-scroll-body { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+.account-modal .register-consumption { max-height: none; overflow: visible; }
+.account-modal .register-settlement { background: #f4f8fa; border-top: 1px solid #cdd8e0; padding: 18px 24px; }
+.account-modal .register-pay-button { min-height: 48px; font-size: 14px; }
+.pdv-app .online-workspace .order-board { grid-template-columns: repeat(4,minmax(240px,1fr)); overflow-x: auto; align-items: stretch; gap: 14px; padding-bottom: 12px; }
+.pdv-app .online-workspace .order-lane { min-width: 0; background: #eef2f5; border-top: 3px solid #c28b29; }
+.pdv-app .online-workspace .order-lane.green { border-top-color: #237653; }
+.pdv-app .online-workspace .order-lane.blue { border-top-color: #507591; }
+.pdv-app .online-workspace .order-lane > header { padding: 16px 12px; }
+.pdv-app .online-workspace .order-lane h2 { font-size: 14px; }
+.pdv-app .online-workspace .order-lane header p { font-size: 11px; color: #647786; }
+.pdv-app .online-workspace .lane-cards { max-height: calc(100dvh - 310px); min-height: 220px; overflow-y: auto; }
+.pdv-app .order-ticket { padding: 15px; box-shadow: none; }
+.pdv-app .order-ticket h3 { font-size: 15px; }
+.pdv-app .ticket-heading > strong { font-size: 20px; font-variant-numeric: tabular-nums; }
+.pdv-app .ticket-foot { align-items: center; gap: 8px; flex-wrap: wrap; }
+.pdv-app .ticket-foot > span { font-size: 12px; }
+.pdv-app .ticket-foot .text-red-600 { color: var(--status-red) !important; font-weight: 600; }
+.pdv-app .register-status { color: var(--status-amber); }
+.pdv-app .page-churrasqueira li button, .pdv-app .page-cozinha li button,
+.pdv-app .page-bar li button { min-width: 44px; min-height: 44px; font-size: 14px; }
+.pdv-app .page-churrasqueira li > div:last-child,
+.pdv-app .page-cozinha li > div:last-child { gap: 10px; }
+.pdv-app .page-churrasqueira li, .pdv-app .page-cozinha li { padding: 12px; }
+.pdv-app .page-churrasqueira button[title="Dar pronto em 1 unidade"] { font-size: 24px; border: 1px solid #c6d2db; background: #fff; }
+@media(max-width:600px) {
+  .pdv-app .page-churrasqueira li > span:first-child { flex-basis: 100%; }
+  .pdv-app .page-churrasqueira li > div:last-child { width: 100%; justify-content: flex-end; }
+  .pdv-app .online-workspace .order-board { grid-template-columns: repeat(4,minmax(270px,85vw)); scroll-snap-type: x proximity; }
+  .pdv-app .online-workspace .order-lane { scroll-snap-align: start; }
+  .pdv-app .online-workspace .lane-cards { max-height: 62dvh; }
+  .account-modal .register-settlement { padding: 12px 16px; }
+  .account-modal .register-breakdown { font-size: 11px; flex-wrap: wrap; }
+  .account-modal .register-pay-row { gap: 8px; }
+  .cash-comanda-bottom { flex-wrap: wrap; }
+  .pdv-app .page-heading h1, .pdv-app .register-heading h1 { font-size: 24px; }
+}
+@media(prefers-reduced-motion:reduce) { .pdv-app *, .pdv-app *::before, .pdv-app *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+

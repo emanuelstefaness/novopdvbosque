@@ -210,7 +210,8 @@ export function buildComandaPrintHtml(d) {
 
     <div class="totais">
       <div class="tot-linha tot-base">TOTAL: R$ ${fmtMoney(totalSem)}</div>
-      <div class="tot-linha tot-serv">+ SERVIÇO (${taxPct}%): R$ ${fmtMoney(taxVal)}</div>
+      <div class="tot-linha tot-serv">+ SERVIÇO ${d.mixed_service ? '(por origem)' : `(${taxPct}%)`}: R$ ${fmtMoney(taxVal)}</div>
+      ${Number(d.credit)>0?`<div class="tot-linha">− ADIANTAMENTO: R$ ${fmtMoney(d.credit)}</div>`:''}
       <div class="tot-linha tot-pagar">Total a pagar: R$ ${fmtMoney(totalCom)}</div>
     </div>
   </div>

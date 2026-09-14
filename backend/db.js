@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { initBilling } from './billing.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { BAR_CATEGORY_SLUGS } from './itemSector.js';
@@ -8,7 +9,7 @@ function sqlQuotedList(slugs) {
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const dbPath = join(__dirname, 'pdv_bosque.db');
+const dbPath = process.env.PDV_DB_PATH || join(__dirname, 'pdv_bosque.db');
 
 export const db = new Database(dbPath);
 
@@ -422,4 +423,5 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_finance_exp_bd ON finance_expenses(business_date);
     CREATE INDEX IF NOT EXISTS idx_finance_inc_bd ON finance_income_manual(business_date);
   `);
+  initBilling(db);
 }

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { getPedidosBar, setPedidoSectorStatus } from '../api'
 import { useSocket } from '../socket'
-import PedidoElapsed, { earliestCreatedAt } from '../components/PedidoElapsed'
+import PedidoElapsed from '../components/PedidoElapsed'
+import {earliestCreatedAt} from '../utils/pedidoTime'
 import { barComandaColumnClass, comandaOnlineLabel, isTipoPedidoOnline, pedidoOnlineBannerModel } from '../utils/comandaOnlineVisual'
 import { observacaoParaProducao } from '../utils/productionObservations'
 
@@ -29,14 +30,13 @@ export default function Bar() {
     setList(data)
   }
 
-  useEffect(() => { load(); return () => { if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current) } }, [])
+  useEffect(() => { const initial=setTimeout(()=>void load(),0); return () => { clearTimeout(initial); if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current) } }, [])
   useSocket(() => {
     if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current)
     loadTimeoutRef.current = setTimeout(() => { load(); loadTimeoutRef.current = null }, 350)
   })
 
   const cards = useMemo(() => groupByComanda(list), [list])
-  const totalCards = cards.length
 
   const setReady = async (pedidoId) => {
     setList((prev) => prev.filter((p) => p.id !== pedidoId))
@@ -65,6 +65,7 @@ export default function Bar() {
     <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden">
       <div className="mb-3 shrink-0">
         <h1 className="text-xl font-bold text-slate-800">Bar</h1>
+      <p className="production-subtitle">Pedidos organizados por comanda e prioridade de preparo.</p>
         <p className="text-sm text-slate-500">Caipirinhas, doses e drinks</p>
       </div>
       <div className="flex min-h-0 flex-1 flex-row gap-3 overflow-x-auto overflow-y-hidden pb-2">
@@ -85,7 +86,7 @@ export default function Bar() {
             <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
               <div>
                 <span className="font-bold text-sm text-slate-800">
-                  Comanda {card.comanda_id} — Mesa {card.mesa}
+                  Comanda {card.items[0]?.production_number || card.comanda_id}{card.items[0]?.production_number ? " (paga)" : ""} — Mesa {card.mesa}
                   {isTipoPedidoOnline(tipoOn) && (
                     <span className="ml-2 inline-block rounded-full bg-violet-200/90 px-2 py-0.5 text-[9px] font-black uppercase text-violet-900">
                       Pedir online
@@ -150,3 +151,4 @@ export default function Bar() {
     </div>
   )
 }
+

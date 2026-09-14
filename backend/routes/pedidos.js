@@ -1,9 +1,17 @@
 import { Router } from 'express';
+import {creditFor} from '../billing.js';
 import { resolveLancheAddonsFromBody } from '../lancheAddons.js';
 import { broadcastAll } from '../socket.js';
 import { getPedidoSector, BAR_CATEGORY_SLUGS } from '../itemSector.js';
 
 export const pedidosRouter = Router();
+pedidosRouter.use((req,res,next)=>{
+ if(['PATCH','DELETE'].includes(req.method)&&/^\/\d+$/.test(req.path)){
+  const db=req.app.get('db'),p=db.prepare('SELECT p.paid_quantity,c.session_key FROM pedidos p JOIN comandas c ON c.id=p.comanda_id WHERE p.id=?').get(Number(req.path.slice(1)));
+  if(p&&(p.paid_quantity>0||creditFor(db,p.session_key).total>0))return res.status(400).json({error:'Pedido possui recebimento. Conclua a conta antes de alterar ou cancelar.'});
+ }
+ next();
+});
 const getDb = (req) => req.app.get('db');
 
 /** Comandas ativas sem nada pendente na grill, mas com acompanhamento pendente na cozinha (só acompanhamentos / “só salada arroz maionese”). */
@@ -114,9 +122,9 @@ pedidosRouter.get('/by-comanda/:comanda_id', (req, res) => {
 pedidosRouter.get('/kitchen', (req, res) => {
   const db = getDb(req);
   const list = db.prepare(`
-    SELECT p.*, i.name as item_name, i.is_grill, i.is_prato_feito, c.mesa, c.id as comanda_id,
+    SELECT p.*, i.name as item_name, i.is_grill, i.is_prato_feito, c.mesa, c.id as comanda_id, c.production_number,
       COALESCE(NULLIF(TRIM(c.tipo_online), ''), o.tipo) AS comanda_tipo_online,
-      s.status as sector_status,
+      s.status as sector_status, MAX(0,p.quantity-s.fulfilled_quantity) AS quantity,
       ei.name as prato_feito_espetinho_name, w.name as waiter_name
     FROM pedido_sector_status s
     JOIN pedidos p ON p.id = s.pedido_id
@@ -142,9 +150,9 @@ pedidosRouter.get('/grill', (req, res) => {
   const mainList = db.prepare(`
     SELECT p.*, i.name as item_name, i.is_prato_feito as item_is_prato_feito,
       COALESCE(i.is_side, 0) as is_side,
-      c.mesa, c.id as comanda_id,
+      c.mesa, c.id as comanda_id, c.production_number,
       COALESCE(NULLIF(TRIM(c.tipo_online), ''), o.tipo) AS comanda_tipo_online,
-      s.status as sector_status,
+      s.status as sector_status, MAX(0,p.quantity-s.fulfilled_quantity) AS quantity,
       ei.name as prato_feito_espetinho_name, w.name as waiter_name
     FROM pedido_sector_status s
     JOIN pedidos p ON p.id = s.pedido_id
@@ -163,9 +171,9 @@ pedidosRouter.get('/grill', (req, res) => {
     companion = db.prepare(`
       SELECT p.*, i.name as item_name, i.is_prato_feito as item_is_prato_feito,
         COALESCE(i.is_side, 0) as is_side,
-        c.mesa, c.id as comanda_id,
+        c.mesa, c.id as comanda_id, c.production_number,
         COALESCE(NULLIF(TRIM(c.tipo_online), ''), o.tipo) AS comanda_tipo_online,
-        sk.status as sector_status,
+        sk.status as sector_status, MAX(0,p.quantity-sk.fulfilled_quantity) AS quantity,
         ei.name as prato_feito_espetinho_name, w.name as waiter_name
       FROM pedidos p
       JOIN items i ON i.id = p.item_id
@@ -187,9 +195,9 @@ pedidosRouter.get('/grill', (req, res) => {
   const companionSolo = db.prepare(`
     SELECT p.*, i.name as item_name, i.is_prato_feito as item_is_prato_feito,
       COALESCE(i.is_side, 0) as is_side,
-      c.mesa, c.id as comanda_id,
+      c.mesa, c.id as comanda_id, c.production_number,
       COALESCE(NULLIF(TRIM(c.tipo_online), ''), o.tipo) AS comanda_tipo_online,
-      sk.status as sector_status,
+      sk.status as sector_status, MAX(0,p.quantity-sk.fulfilled_quantity) AS quantity,
       ei.name as prato_feito_espetinho_name, w.name as waiter_name
     FROM pedidos p
     JOIN items i ON i.id = p.item_id
@@ -228,7 +236,7 @@ pedidosRouter.get('/bar', (req, res) => {
   const db = getDb(req);
   const barIn = BAR_CATEGORY_SLUGS.map(() => '?').join(', ');
   const list = db.prepare(`
-    SELECT p.*, i.name as item_name, c.mesa, c.id as comanda_id,
+    SELECT p.*, i.name as item_name, c.mesa, c.id as comanda_id, c.production_number,
       COALESCE(NULLIF(TRIM(c.tipo_online), ''), o.tipo) AS comanda_tipo_online,
       COALESCE(s.status, 'pending') as sector_status,
       w.name as waiter_name
@@ -273,7 +281,7 @@ pedidosRouter.get('/production/grill', (req, res) => {
   const db = getDb(req);
   /* Carnes diretas na churrasqueira — exclui o prato PF em si (o nome do cardápio); os cortes do PF entram via fromPratoFeito */
   const directGrill = db.prepare(`
-    SELECT i.name, p.meat_point, SUM(p.quantity) as total
+    SELECT i.name, p.meat_point, SUM(MAX(0,p.quantity-s.fulfilled_quantity)) as total
     FROM pedidos p
     JOIN items i ON i.id = p.item_id
     JOIN pedido_sector_status s ON s.pedido_id = p.id AND s.sector = 'grill'
@@ -282,7 +290,7 @@ pedidosRouter.get('/production/grill', (req, res) => {
     GROUP BY p.item_id, p.meat_point
   `).all();
   const fromPratoFeito = db.prepare(`
-    SELECT ei.name, p.meat_point, SUM(p.quantity) as total
+    SELECT ei.name, p.meat_point, SUM(MAX(0,p.quantity-s.fulfilled_quantity)) as total
     FROM pedidos p
     JOIN items it ON it.id = p.item_id
     JOIN items ei ON ei.id = p.prato_feito_espetinho_id
@@ -301,14 +309,14 @@ pedidosRouter.get('/production/grill', (req, res) => {
     map[k] = { name: r.name, meat_point: r.meat_point || null, total: (map[k]?.total || 0) + r.total };
   });
   const pfPratosRow = db.prepare(`
-    SELECT COALESCE(SUM(p.quantity), 0) as total
+    SELECT COALESCE(SUM(MAX(0,p.quantity-s.fulfilled_quantity)), 0) as total
     FROM pedidos p
     JOIN items it ON it.id = p.item_id
     JOIN pedido_sector_status s ON s.pedido_id = p.id AND s.sector = 'grill'
     WHERE it.is_prato_feito = 1 AND p.status != 'cancelled' AND p.status != 'delivered' AND s.status != 'ready'
   `).get();
   const pfEspRow = db.prepare(`
-    SELECT COALESCE(SUM(p.quantity), 0) as total
+    SELECT COALESCE(SUM(MAX(0,p.quantity-s.fulfilled_quantity)), 0) as total
     FROM pedidos p
     JOIN items it ON it.id = p.item_id
     JOIN pedido_sector_status s ON s.pedido_id = p.id AND s.sector = 'grill'
@@ -320,7 +328,7 @@ pedidosRouter.get('/production/grill', (req, res) => {
   const pratoFeito = pratos > 0 ? { pratos, espetinhos } : null;
 
   const companionSides = db.prepare(`
-    SELECT i.name, SUM(p.quantity) as total
+    SELECT i.name, SUM(MAX(0,p.quantity-sk.fulfilled_quantity)) as total
     FROM pedidos p
     JOIN items i ON i.id = p.item_id
     JOIN categories cat ON cat.id = i.category_id
@@ -362,7 +370,7 @@ pedidosRouter.patch('/churrasqueira-ready/:pedidoId', (req, res) => {
   const pid = Number(req.params.pedidoId);
   if (!Number.isFinite(pid) || pid < 1) return res.status(400).json({ error: 'pedido inválido' });
   const row = db.prepare(`
-    SELECT p.id, p.status AS pedido_status, p.sector AS pedido_sector,
+    SELECT p.id, p.quantity, p.status AS pedido_status, p.sector AS pedido_sector,
            COALESCE(i.is_grill, 0) AS is_grill,
            COALESCE(i.is_side, 0) AS is_side,
            lower(trim(ifnull(c.slug, ''))) AS category_slug
@@ -379,9 +387,12 @@ pedidosRouter.patch('/churrasqueira-ready/:pedidoId', (req, res) => {
   const slug = row.category_slug || '';
   const ig = Number(row.is_grill) === 1;
   const isSide = Number(row.is_side) === 1;
-  const ins = db.prepare(
-    "INSERT OR REPLACE INTO pedido_sector_status (pedido_id, sector, status, updated_at) VALUES (?, ?, 'ready', datetime('now','localtime'))"
-  );
+  const ins = {run(pid,sector){
+    const existing=db.prepare('SELECT * FROM pedido_sector_status WHERE pedido_id=? AND sector=?').get(pid,sector);
+    if(existing?.status==='ready')return;
+    const done=req.body?.one===true?Math.min(row.quantity,(existing?.fulfilled_quantity||0)+1):row.quantity;
+    db.prepare("INSERT OR REPLACE INTO pedido_sector_status(pedido_id,sector,status,fulfilled_quantity,updated_at) VALUES(?,?,?,?,datetime('now','localtime'))").run(pid,sector,done>=row.quantity?'ready':(existing?.status||'pending'),done);
+  }};
   const run = db.transaction(() => {
     if (slug === 'acompanhamentos') {
       if (!ig) {
@@ -404,10 +415,21 @@ pedidosRouter.patch('/churrasqueira-ready/:pedidoId', (req, res) => {
   });
   run();
   broadcastAll('pedidos', {});
-  io.to('kitchen').emit('pedidos', {});
-  io.to('grill').emit('pedidos', {});
-  io.to('bar').emit('pedidos', {});
+  io?.to('kitchen').emit('pedidos', {});
+  io?.to('grill').emit('pedidos', {});
+  io?.to('bar').emit('pedidos', {});
   res.json({ ok: true });
+});
+
+// Baixa de produção independente da quantidade vendida e do pagamento.
+pedidosRouter.post('/:id/fulfill-one', (req, res) => {
+  const db = getDb(req), id = Number(req.params.id);
+  const row = db.prepare("SELECT p.quantity,p.status,s.fulfilled_quantity,s.status AS sector_status FROM pedidos p JOIN pedido_sector_status s ON s.pedido_id=p.id AND s.sector='kitchen' WHERE p.id=?").get(id);
+  if (!row || ['cancelled','delivered'].includes(row.status) || row.sector_status === 'ready') return res.status(400).json({error:'Pedido indisponível para baixa'});
+  const done = Math.min(row.quantity, row.fulfilled_quantity + 1);
+  db.prepare("UPDATE pedido_sector_status SET fulfilled_quantity=?,status=?,updated_at=datetime('now','localtime') WHERE pedido_id=? AND sector='kitchen'").run(done,done>=row.quantity?'ready':row.sector_status,id);
+  broadcastAll('pedidos', {});
+  res.json({ok:true,remaining:row.quantity-done});
 });
 
 pedidosRouter.patch('/:id/sector-status', (req, res) => {
@@ -425,6 +447,10 @@ pedidosRouter.patch('/:id/sector-status', (req, res) => {
 
 pedidosRouter.patch('/:id', (req, res) => {
   const db = getDb(req);
+  const existing=db.prepare('SELECT p.*,c.status AS comanda_status FROM pedidos p JOIN comandas c ON c.id=p.comanda_id WHERE p.id=?').get(Number(req.params.id));
+  if(!existing || existing.paid_at || existing.paid_quantity>0 || existing.comanda_status==='closed') return res.status(400).json({error:'Item pago ou comanda fechada não pode ser alterado'});
+  if(req.body.quantity!==undefined && (!Number.isInteger(Number(req.body.quantity)) || Number(req.body.quantity)<1)) return res.status(400).json({error:'Quantidade inválida'});
+  if(req.body.unit_price!==undefined && (!Number.isFinite(Number(req.body.unit_price)) || Number(req.body.unit_price)<0)) return res.status(400).json({error:'Preço inválido'});
   const { quantity, unit_price, observations, status } = req.body || {};
   const updates = [];
   const values = [];
@@ -444,9 +470,11 @@ pedidosRouter.patch('/:id', (req, res) => {
 pedidosRouter.delete('/:id', (req, res) => {
   const db = getDb(req);
   db.prepare(
-    "UPDATE pedidos SET status = ?, updated_at = datetime('now','localtime') WHERE id = ?"
+    "UPDATE pedidos SET status = ?, updated_at = datetime('now','localtime') WHERE id = ? AND paid_at IS NULL AND paid_quantity=0"
   ).run('cancelled', Number(req.params.id));
   broadcastAll('pedidos', {});
   broadcastAll('comandas', {});
   res.json({ ok: true });
 });
+
+

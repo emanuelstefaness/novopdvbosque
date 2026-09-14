@@ -1,43 +1,9 @@
+import { receipts, resolveRange as validatedRange } from '../reporting.js';
 import { Router } from 'express';
 
 export const financeRouter = Router();
 const getDb = (req) => req.app.get('db');
-
-/** Mesma regra dos relatórios de venda: comanda fechada com itens ou pessoas. */
-function paidComandaWhere(alias) {
-  const a = alias;
-  return `
-    ${a}.status = 'closed' AND ${a}.closed_at IS NOT NULL
-    AND (
-      EXISTS (SELECT 1 FROM pedidos ped WHERE ped.comanda_id = ${a}.id AND ped.status != 'cancelled')
-      OR IFNULL(${a}.people_count, 0) > 0
-    )
-  `;
-}
-
-/** Valor total da comanda (subtotal + couvert previsto + taxa %) — igual ao relatório. */
-function comandaTotalSql(alias) {
-  const a = alias;
-  return `(
-    IFNULL((SELECT SUM(p.quantity * p.unit_price) FROM pedidos p WHERE p.comanda_id = ${a}.id AND p.status != 'cancelled'), 0)
-    + (IFNULL(${a}.people_count, 0) * COALESCE(${a}.couvert_per_person, 5))
-    + ((IFNULL(${a}.service_tax_percent, 0) / 100.0) * IFNULL((SELECT SUM(p2.quantity * p2.unit_price) FROM pedidos p2 WHERE p2.comanda_id = ${a}.id AND p2.status != 'cancelled'), 0))
-  )`;
-}
-
-/**
- * Dia operacional: tudo entre 01:00 do dia D e 00:59:59 do dia seguinte conta como D.
- * Em SQLite: date(datetime, '-1 hour') no horário local do texto gravado.
- */
-function resolveRange(req) {
-  const today = new Date().toISOString().slice(0, 10);
-  let from = (req.query.from || today).toString().trim().slice(0, 10);
-  let to = (req.query.to || from).toString().trim().slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) from = today;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(to)) to = from;
-  if (from > to) [from, to] = [to, from];
-  return { from, to };
-}
+financeRouter.use((req,res,next)=>{if(req.method==='GET'){try{req.range=validatedRange(req)}catch(e){return res.status(400).json({error:e.message})}}next()});
 
 function addIsoDay(iso, delta) {
   const [y, m, d] = iso.split('-').map(Number);
@@ -98,29 +64,13 @@ function mergeDailyRows(from, to, comandas, online, expenses, manualIn) {
 financeRouter.get('/daily', (req, res) => {
   try {
     const db = getDb(req);
-    const { from, to } = resolveRange(req);
-    const paid = paidComandaWhere('c');
-    const totalExpr = comandaTotalSql('c');
-
-    const comandas = db.prepare(`
-      SELECT date(c.closed_at, '-1 hour') as business_date,
-        SUM(${totalExpr}) as total
-      FROM comandas c
-      WHERE date(c.closed_at, '-1 hour') BETWEEN ? AND ?
-      AND ${paid.trim()}
-      AND c.origin_order_id IS NULL
-      GROUP BY date(c.closed_at, '-1 hour')
-    `).all(from, to);
-
-    const online = db.prepare(`
-      SELECT date(COALESCE(o.updated_at, o.created_at), '-1 hour') as business_date,
-        SUM(o.valor_total) as total
-      FROM orders o
-      WHERE o.status = 'entregue'
-      AND date(COALESCE(o.updated_at, o.created_at), '-1 hour') BETWEEN ? AND ?
-      GROUP BY date(COALESCE(o.updated_at, o.created_at), '-1 hour')
-    `).all(from, to);
-
+    const { from, to } = req.range;
+    const rows=receipts(db,from,to);
+    const group=channel=>{
+      const map=new Map();for(const r of rows.filter(r=>r.channel===channel)) map.set(r.business_date,(map.get(r.business_date)||0)+Math.round(r.total*100));
+      return [...map].map(([business_date,cents])=>({business_date,total:cents/100}));
+    };
+    const comandas=group('salon'),online=group('online');
     const expenses = db.prepare(`
       SELECT business_date, SUM(amount) as total
       FROM finance_expenses
@@ -165,7 +115,7 @@ financeRouter.get('/daily', (req, res) => {
 /** Lista lançamentos manuais (despesas e outras entradas) no período */
 financeRouter.get('/entries', (req, res) => {
   const db = getDb(req);
-  const { from, to } = resolveRange(req);
+  const { from, to } = req.range;
   const exp = db.prepare(`
     SELECT id, 'expense' as kind, business_date, description, amount, created_at
     FROM finance_expenses

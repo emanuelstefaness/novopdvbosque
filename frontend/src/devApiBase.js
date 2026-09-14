@@ -11,7 +11,7 @@ export function getApiBase() {
   if (env != null && String(env).trim() !== '') {
     return String(env).replace(/\/$/, '');
   }
-  if (!import.meta.env.DEV) return DEFAULT_PRODUCTION_API;
+  if (!import.meta.env.DEV) return import.meta.env.VITE_PUBLIC_ONLY ? DEFAULT_PRODUCTION_API : '';
   if (typeof window === 'undefined') return '';
   const h = window.location.hostname;
   if (h === 'localhost' || h === '127.0.0.1') return '';

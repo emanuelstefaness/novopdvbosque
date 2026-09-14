@@ -1,116 +1,216 @@
-import { Link } from 'react-router-dom'
-import { useState } from 'react'
-import { useWaiter } from '../context/WaiterContext'
-
+import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import {useWaiter} from "../context/useWaiter";
+import { getComandas, getOrders, loginOperator } from "../api";
+import { useSocket } from "../socket";
+import Icon from "../components/Icon";
+const modules = [
+  ["/garcons", "Mesas e comandas", "Abra uma mesa e lance pedidos.", "receipt"],
+  [
+    "/caixa",
+    "Frente de caixa",
+    "Confira contas e registre pagamentos.",
+    "wallet",
+  ],
+  [
+    "/pedidos-online",
+    "Pedidos online",
+    "Acompanhe delivery e retirada.",
+    "orders",
+  ],
+  ["/cozinha", "Cozinha", "Organize os pedidos em preparo.", "chef"],
+  ["/churrasqueira", "Churrasqueira", "Carnes, espetinhos e pontos.", "flame"],
+  ["/bar", "Bar", "Bebidas e drinks da operação.", "cup"],
+  ["/cardapio", "Cardápio", "Produtos, categorias e preços.", "book"],
+  ["/admin", "Relatórios", "Vendas e resultados do período.", "chart"],
+  ["/financeiro", "Financeiro", "Recebimentos e despesas.", "wallet"],
+];
 export default function Home() {
-  const { waiter, setWaiter, logout } = useWaiter()
-  const [modoLogin, setModoLogin] = useState('') // '' | 'garcom' | 'caixa'
-  const [senhaCaixa, setSenhaCaixa] = useState('')
-  const [erroLogin, setErroLogin] = useState('')
-  const modulesCompleto = [
-    { to: '/garcons', label: 'Garçons', desc: 'Comandas e pedidos (celular)', icon: '📱' },
-    { to: '/caixa', label: 'Frente de Caixa', desc: 'Contas, pagamento, impressão', icon: '💰' },
-    { to: '/cardapio', label: 'Cardápio', desc: 'Categorias e itens do menu', icon: '📋' },
-    { to: '/cozinha', label: 'Cozinha', desc: 'Pedidos e produção', icon: '🍳' },
-    { to: '/churrasqueira', label: 'Churrasqueira', desc: 'Espetinhos e carnes', icon: '🔥' },
-    { to: '/bar', label: 'Bar', desc: 'Bebidas e drinks', icon: '🍹' },
-    { to: '/admin', label: 'Relatórios', desc: 'Vendas e faturamento', icon: '📊' },
-    { to: '/financeiro', label: 'Financeiro', desc: 'Despesas, entradas e lucro por dia', icon: '💹' },
-  ]
-  const modulesGarcom = [
-    { to: '/garcons', label: 'Comandas e pedidos', desc: 'Abrir mesa e lançar pedidos', icon: '📱' },
-  ]
-  const modules = (waiter && !waiter.isCaixa) ? modulesGarcom : (waiter?.isCaixa ? modulesCompleto : [])
-  const subtitulo = waiter?.isCaixa ? 'Frente de caixa e produções' : (waiter ? 'Sistema de garçons' : 'Sistema de gerenciamento')
-
-  const entrarGarcom = () => {
-    setWaiter({ name: 'Garçom', isCaixa: false })
-    setModoLogin('')
-    setErroLogin('')
-  }
-
-  const entrarCaixa = () => {
-    if (senhaCaixa !== '12345') {
-      setErroLogin('Senha incorreta')
-      return
+  const { waiter, setWaiter } = useWaiter();
+  const [mode, setMode] = useState("caixa"),
+    [password, setPassword] = useState(""),
+    [error, setError] = useState("");
+  const [comandas, setComandas] = useState({}),
+    [orders, setOrders] = useState([]);
+  const load = async () => {
+    if (!waiter) return;
+    try {
+      const [c, o] = await Promise.all([
+        getComandas(),
+        waiter.isCaixa ? getOrders() : Promise.resolve([]),
+      ]);
+      setComandas(c);
+      setOrders(o);
+    } catch (e) {
+      setError(e.message);
     }
-    setWaiter({ name: 'Caixa', isCaixa: true })
-    setModoLogin('')
-    setSenhaCaixa('')
-    setErroLogin('')
-  }
-
-  return (
-    <div className="mx-auto max-w-4xl">
-      <h1 className="mb-2 text-center text-2xl font-bold text-amber-600 md:text-3xl">BOSQUE DA CARNE</h1>
-      <p className="mb-6 text-center text-slate-500">
-        {subtitulo}
-      </p>
-      <Link
-        to="/pedir"
-        className="mb-6 flex items-center justify-center gap-2 rounded-2xl border-2 border-amber-400 bg-amber-50 p-4 font-semibold text-amber-800 hover:bg-amber-100"
-      >
-        🛒 Fazer pedido online (delivery ou retirada)
-      </Link>
-      {!waiter && (
-        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold text-slate-800">Acesso ao sistema interno</h2>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-primary" onClick={() => { setModoLogin('garcom'); setErroLogin('') }}>
-              Login Garçom
+  };
+  useEffect(() => {
+    const initial=setTimeout(()=>void load(),0);
+    return()=>clearTimeout(initial);
+  }, [waiter]);
+  useSocket(() => void load());
+  const login = async (e) => {
+    e.preventDefault();
+    try {
+      const user = await loginOperator(mode, password);
+      setWaiter(user);
+      setError("");
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  if (!waiter)
+    return (
+      <div className="login-page">
+        <div className="login-brand">
+          <img className="establishment-logo login-logo" src="/logo-bosque-transparente.png" alt="Bosque da Carne" />
+        </div>
+        <main className="login-card">
+          <span className="eyebrow">ACESSO À OPERAÇÃO</span>
+          <h1>Entrar no sistema</h1>
+          <p>Entre para iniciar o atendimento.</p>
+          <div className="segmented">
+            <button
+              className={mode === "caixa" ? "selected" : ""}
+              onClick={() => {
+                setMode("caixa");
+                setError("");
+              }}
+            >
+              <Icon name="wallet" size={17} />
+              Caixa e produção
             </button>
-            <button type="button" className="btn btn-secondary" onClick={() => { setModoLogin('caixa'); setErroLogin('') }}>
-              Login Caixa
+            <button
+              className={mode === "garcom" ? "selected" : ""}
+              onClick={() => {
+                setMode("garcom");
+                setError("");
+              }}
+            >
+              <Icon name="user" size={17} />
+              Garçom
             </button>
           </div>
-          {modoLogin === 'garcom' && (
-            <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-              <p className="mb-3">Entrar como Garçom libera apenas a área de garçons.</p>
-              <button type="button" className="btn btn-primary" onClick={entrarGarcom}>
-                Entrar como Garçom
-              </button>
-            </div>
-          )}
-          {modoLogin === 'caixa' && (
-            <div className="mt-4 rounded-lg bg-slate-50 p-3">
-              <p className="mb-2 text-sm text-slate-600">Digite a senha do Caixa para liberar todas as opções.</p>
-              <input
-                type="password"
-                placeholder="Senha do Caixa"
-                value={senhaCaixa}
-                onChange={(e) => setSenhaCaixa(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && entrarCaixa()}
-                className="mb-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
-              />
-              {erroLogin && <p className="mb-2 text-sm text-red-600">{erroLogin}</p>}
-              <button type="button" className="btn btn-primary" onClick={entrarCaixa}>
-                Entrar como Caixa
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-      {waiter && (
-        <div className="mb-6 flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-slate-700">
-            Logado como <strong>{waiter.isCaixa ? 'Caixa' : 'Garçom'}</strong>.
-          </p>
-          <button type="button" className="btn btn-secondary" onClick={logout}>Trocar login</button>
-        </div>
-      )}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {modules.map((m) => (
-          <Link
-            key={m.to}
-            to={m.to}
-            className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-amber-400 hover:shadow-md"
-          >
-            <span className="text-3xl">{m.icon}</span>
-            <span className="mt-2 font-semibold text-slate-800">{m.label}</span>
-            <span className="mt-1 text-sm text-slate-500">{m.desc}</span>
+          <form onSubmit={login}>
+            {mode === "caixa" ? (
+              <label className="field-label">
+                Senha do caixa
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Digite sua senha"
+                  autoComplete="current-password"
+                  autoFocus
+                />
+              </label>
+            ) : (
+              <div className="login-note">
+                Acesso a mesas, comandas e lançamento de pedidos.
+              </div>
+            )}
+            {error && (
+              <p className="error-banner" role="alert">
+                {error}
+              </p>
+            )}
+            <button className="btn btn-primary login-submit" type="submit">
+              Entrar no sistema
+              <Icon name="arrow" size={18} />
+            </button>
+          </form>
+          <Link className="login-public" to="/pedir">
+            Quero fazer um pedido <Icon name="arrow" size={16} />
           </Link>
-        ))}
+        </main>
+        <footer>Bosque da Carne · Sistema de atendimento</footer>
+      </div>
+    );
+  const active = Object.values(comandas).filter(
+      (c) => c.id <= 200 && ["open", "ordering", "paying"].includes(c.status),
+    ),
+    pending = orders.filter(
+      (o) => !["entregue", "cancelado"].includes(o.status),
+    );
+  return (
+    <div className="overview-page">
+      <header className="page-heading">
+        <div>
+          <span className="eyebrow">OPERAÇÃO DO RESTAURANTE</span>
+          <h1>Visão geral</h1>
+          <p>Acompanhe o atendimento e acesse sua área de trabalho.</p>
+        </div>
+        <Link
+          className="btn btn-primary"
+          to={waiter.isCaixa ? "/caixa" : "/garcons"}
+        >
+          <Icon name="plus" size={18} />
+          Iniciar atendimento
+        </Link>
+      </header>
+      {error && <p className="error-banner">{error}</p>}
+      <div className="overview-metrics">
+        <div>
+          <span>Comandas em atendimento</span>
+          <strong>
+            {active.length}
+            <small>/ 200</small>
+          </strong>
+          <p>
+            <i className="status-dot green" />
+            {200 - active.length} disponíveis
+          </p>
+        </div>
+        <div>
+          <span>Aguardando pagamento</span>
+          <strong>
+            {active
+              .filter((c) => c.status === "paying")
+              .length.toString()
+              .padStart(2, "0")}
+          </strong>
+          <p>Contas para finalizar no caixa</p>
+        </div>
+        {waiter.isCaixa && (
+          <div>
+            <span>Pedidos online ativos</span>
+            <strong>{pending.length.toString().padStart(2, "0")}</strong>
+            <p>Delivery e retirada</p>
+          </div>
+        )}
+      </div>
+      <div className="section-heading">
+        <h2>Áreas de trabalho</h2>
+        <span>Escolha onde deseja atuar</span>
+      </div>
+      <div className="module-grid">
+        {modules
+          .filter(([path]) => waiter.isCaixa || path === "/garcons")
+          .map(([path, title, desc, icon]) => (
+            <Link to={path} className="module-card" key={path}>
+              <span className="module-icon">
+                <Icon name={icon} size={24} />
+              </span>
+              <div>
+                <h2>{title}</h2>
+                <p>{desc}</p>
+              </div>
+              <Icon name="arrow" size={18} />
+            </Link>
+          ))}
+      </div>
+      <div className="overview-bottom">
+        <Icon name="monitor" size={22} />
+        <div>
+          <strong>Painéis de produção</strong>
+          <p>Uma visão dedicada para as telas da equipe.</p>
+        </div>
+        <Link to="/tv/cozinha">Cozinha </Link>
+        <Link to="/tv/churrasqueira">Churrasqueira </Link>
+        <Link to="/tv/bar">Bar </Link>
       </div>
     </div>
-  )
+  );
 }
+

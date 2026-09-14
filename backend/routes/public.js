@@ -13,14 +13,9 @@ function normalizeTelefone(v) {
   return String(v || '').replace(/\D/g, '');
 }
 
-function telefoneConfere(stored, query) {
-  const a = normalizeTelefone(stored);
-  const b = normalizeTelefone(query);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  if (b.length >= 8 && a.endsWith(b.slice(-8))) return true;
-  if (b.length >= 4 && a.endsWith(b.slice(-4))) return true;
-  return false;
+function telefoneConfere(stored,query) {
+  const norm=v=>{const n=normalizeTelefone(v);return n.length>11 && n.startsWith('55')?n.slice(2):n};
+  const a=norm(stored),b=norm(query);return a.length>=10 && a===b;
 }
 
 function orderComItens(db, order) {
@@ -454,7 +449,7 @@ publicRouter.get('/orders/:id', async (req, res) => {
 
   const telReq = normalizeTelefone(req.query.telefone);
   const telOrder = normalizeTelefone(order.cliente_telefone);
-  if (telReq && telOrder && !telefoneConfere(telOrder, telReq)) {
+  if (!telefoneConfere(telOrder, telReq)) {
     return res.status(403).json({ error: 'Telefone não confere com este pedido' });
   }
 

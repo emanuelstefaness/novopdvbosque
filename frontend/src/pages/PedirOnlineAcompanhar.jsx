@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getApiBase } from '../devApiBase'
-import PedidoOnlineAcompanhamento, { lerPedidoLocal } from '../components/PedidoOnlineAcompanhamento'
+import PedidoOnlineAcompanhamento from '../components/PedidoOnlineAcompanhamento'
+import { lerPedidoLocal } from '../utils/pedidoStorage'
 
 const API = getApiBase()
 

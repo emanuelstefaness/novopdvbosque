@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { WaiterProvider } from './context/WaiterContext'
 import App from './App.jsx'
 import './index.css'
+import './refinements.css'
 
 /** Mostra erro na tela (útil no iPad quando o console não está visível) */
 class RootErrorBoundary extends Component {

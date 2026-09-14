@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { getPedidosKitchen, setPedidoSectorStatus, updatePedido } from '../api'
+import { getPedidosKitchen, setPedidoSectorStatus, fulfillKitchenUnit } from '../api'
 import { useSocket } from '../socket'
-import PedidoElapsed, { earliestCreatedAt } from '../components/PedidoElapsed'
+import PedidoElapsed from '../components/PedidoElapsed'
+import {earliestCreatedAt} from '../utils/pedidoTime'
 import { cozinhaPedidoCardClass, comandaOnlineLabel, isPedidoOnline, pedidoOnlineBannerModel, tipoOnlineFromPedido } from '../utils/comandaOnlineVisual'
 import { observacaoParaProducao } from '../utils/productionObservations'
 import { textoResumoAddonsPedido } from '../utils/lancheAddons'
@@ -59,7 +60,7 @@ export default function Cozinha() {
     setList(pedidos)
   }
 
-  useEffect(() => { load(); return () => { if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current) } }, [])
+  useEffect(() => { const initial=setTimeout(()=>void load(),0); return () => { clearTimeout(initial); if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current) } }, [])
   useSocket(() => {
     if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current)
     loadTimeoutRef.current = setTimeout(() => { load(); loadTimeoutRef.current = null }, 350)
@@ -76,13 +77,13 @@ export default function Cozinha() {
     }
   }
 
-  /** Retira 1 unidade da produção: se quantity > 1, diminui no pedido; se for 1, equivale a pronto. */
+  /** Retira uma unidade apenas da fila de produção, preservando a conta. */
   const fulfillOneKitchenUnit = async (p) => {
     const q = Math.max(1, Number(p.quantity) || 1)
     if (q > 1) {
       setList((prev) => prev.map((x) => (x.id === p.id ? { ...x, quantity: q - 1 } : x)))
       try {
-        await updatePedido(p.id, { quantity: q - 1 })
+        await fulfillKitchenUnit(p.id)
         load()
       } catch {
         load()
@@ -130,6 +131,7 @@ export default function Cozinha() {
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
       <h1 className="mb-3 shrink-0 text-xl font-bold text-slate-800">Cozinha</h1>
+      <p className="production-subtitle">Pedidos organizados por comanda e prioridade de preparo.</p>
       <div className="mb-4 shrink-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
         <h2 className="mb-4 text-xl font-bold text-amber-600 md:text-2xl">Total para produção</h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -138,7 +140,7 @@ export default function Cozinha() {
               <span className="block text-2xl font-bold text-slate-800 md:text-3xl">{p.total}</span>
               {p.deliveryTotal > 0 && (
                 <span className="mx-auto mt-1 inline-flex max-w-full items-center justify-center rounded-lg bg-sky-600 px-2.5 py-1 text-[11px] font-black uppercase leading-tight tracking-wide text-white shadow-md ring-2 ring-sky-300/80">
-                  🚚 {p.deliveryTotal} delivery{p.deliveryTotal !== p.total ? ` · ${p.total - p.deliveryTotal} salão` : ''}
+                   {p.deliveryTotal} delivery{p.deliveryTotal !== p.total ? ` · ${p.total - p.deliveryTotal} salão` : ''}
                 </span>
               )}
               <span className="mt-1 text-base font-medium text-slate-600">{p.name}</span>
@@ -158,7 +160,7 @@ export default function Cozinha() {
               <span className="block text-2xl font-bold text-amber-700 md:text-3xl">{pratoFeitoSummary.total}</span>
               {pratoFeitoSummary.deliveryTotal > 0 && (
                 <span className="mx-auto mt-1 inline-flex max-w-full items-center justify-center rounded-lg bg-sky-600 px-2.5 py-1 text-[11px] font-black uppercase leading-tight tracking-wide text-white shadow-md ring-2 ring-sky-300/80">
-                  🚚 {pratoFeitoSummary.deliveryTotal} delivery
+                   {pratoFeitoSummary.deliveryTotal} delivery
                   {pratoFeitoSummary.deliveryTotal !== pratoFeitoSummary.total
                     ? ` · ${pratoFeitoSummary.total - pratoFeitoSummary.deliveryTotal} salão`
                     : ''}
@@ -284,10 +286,10 @@ export default function Cozinha() {
                     }`}
                   >
                     {pratoFeitoTemDelivery && pratoFeitoTemRetirada
-                      ? '🛒 Prato Feito — pedidos online (entrega + retirada)'
+                      ? ' Prato Feito — pedidos online (entrega + retirada)'
                       : pratoFeitoTemDelivery
-                        ? '🚚 Prato Feito — pedido online entrega (delivery) — embalar'
-                        : '🛍 Prato Feito — pedido online retirada no balcão'}
+                        ? ' Prato Feito — pedido online entrega (delivery) — embalar'
+                        : ' Prato Feito — pedido online retirada no balcão'}
                   </span>
                 </div>
               )}

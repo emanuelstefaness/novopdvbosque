@@ -221,7 +221,7 @@ export default function Cardapio() {
                   <tr key={i.id} className="border-b border-slate-100">
                     <td className="p-2 font-medium text-slate-800">{i.name}</td>
                     <td className="p-2 text-slate-600">{i.category_name || '-'}</td>
-                    <td className="p-2">R$ {Number(i.price).toFixed(2)}</td>
+                    <td className="p-2">R$ {Number(i.price).toFixed(2).replace('.', ',')}</td>
                     <td className="p-2 text-xs text-slate-500">
                       {[i.is_grill && 'Churrasq.', i.is_kitchen && 'Cozinha', i.is_bar && 'Bar'].filter(Boolean).join(', ') || '-'}
                       {i.requires_meat_point ? ' · Ponto' : ''}
@@ -308,53 +308,19 @@ function firstCategoryId(cats) {
 function ModalItem({ modal, categories, onClose, onSave }) {
   const isEdit = modal.type === 'edit'
   const item = isEdit ? modal.item : null
-  const [name, setName] = useState('')
-  const [category_id, setCategory_id] = useState('')
-  const [price, setPrice] = useState('')
-  const [description, setDescription] = useState('')
-  const [requires_meat_point, setRequires_meat_point] = useState(false)
-  const [is_grill, setIs_grill] = useState(false)
-  const [is_kitchen, setIs_kitchen] = useState(false)
-  const [is_bar, setIs_bar] = useState(false)
-  const [is_side, setIs_side] = useState(false)
-  const [is_prato_feito, setIs_prato_feito] = useState(false)
-  const [internal_only, setInternal_only] = useState(false)
+  const [name, setName] = useState(item?.name || '')
+  const [categorySelection, setCategory_id] = useState(item?.category_id != null ? String(item.category_id) : '')
+  const category_id=categories.some(c=>String(c.id)===categorySelection)?categorySelection:firstCategoryId(categories)
+  const [price, setPrice] = useState(item?.price != null ? String(item.price) : '')
+  const [description, setDescription] = useState(item?.description || '')
+  const [requires_meat_point, setRequires_meat_point] = useState(!!item?.requires_meat_point)
+  const [is_grill, setIs_grill] = useState(!!item?.is_grill)
+  const [is_kitchen, setIs_kitchen] = useState(!!item?.is_kitchen)
+  const [is_bar, setIs_bar] = useState(!!item?.is_bar)
+  const [is_side, setIs_side] = useState(!!item?.is_side)
+  const [is_prato_feito, setIs_prato_feito] = useState(!!item?.is_prato_feito)
+  const [internal_only, setInternal_only] = useState(!!item?.internal_only)
 
-  useEffect(() => {
-    if (isEdit && item) {
-      setName(item.name || '')
-      setCategory_id(item.category_id != null ? String(item.category_id) : '')
-      setPrice(item.price != null && item.price !== '' ? String(item.price) : '')
-      setDescription(item.description || '')
-      setRequires_meat_point(!!item.requires_meat_point)
-      setIs_grill(!!item.is_grill)
-      setIs_kitchen(!!item.is_kitchen)
-      setIs_bar(!!item.is_bar)
-      setIs_side(!!item.is_side)
-      setIs_prato_feito(!!item.is_prato_feito)
-      setInternal_only(!!item.internal_only)
-      return
-    }
-    setName('')
-    setPrice('')
-    setDescription('')
-    setRequires_meat_point(false)
-    setIs_grill(false)
-    setIs_kitchen(false)
-    setIs_bar(false)
-    setIs_side(false)
-    setIs_prato_feito(false)
-    setInternal_only(false)
-    setCategory_id(firstCategoryId(categories))
-  }, [isEdit, item?.id, modal.type])
-
-  useEffect(() => {
-    if (isEdit || !categories.length) return
-    setCategory_id((prev) => {
-      if (prev && categories.some((c) => String(c.id) === prev)) return prev
-      return firstCategoryId(categories)
-    })
-  }, [isEdit, categories])
 
   const submit = (e) => {
     e.preventDefault()

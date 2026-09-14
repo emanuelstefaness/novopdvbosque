@@ -1,4 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import SimpleReports from '../components/SimpleReports'
+import Icon from '../components/Icon'
+import { businessDate } from '../utils/businessDate'
+import { useSocket } from '../socket'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   getReportsVendasComandas,
   getReportsVendasPorDia,
@@ -11,7 +15,7 @@ import {
 } from '../api'
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10)
+  return businessDate()
 }
 
 function formatMoney(n) {
@@ -60,8 +64,12 @@ export default function Admin() {
   const [cancelamentos, setCancelamentos] = useState(null)
   const [tab, setTab] = useState('faturamento')
   const [err, setErr] = useState(null)
+  const [loading,setLoading]=useState(false)
+  const requestId=useRef(0)
 
   const load = async () => {
+    const request=++requestId.current
+    setLoading(true)
     setErr(null)
     try {
       const [vc, vd, itens, cat, fat, churr, gar, canc] = await Promise.all([
@@ -74,6 +82,7 @@ export default function Admin() {
         getReportsPorGarcom(from, to),
         getReportsCancelamentos(from, to)
       ])
+      if(request!==requestId.current)return
       setVendasComandas(vc)
       setVendasPorDia(vd)
       setItensMaisVendidos(itens)
@@ -83,27 +92,44 @@ export default function Admin() {
       setPorGarcom(gar)
       setCancelamentos(canc)
     } catch (e) {
-      setErr(e?.message || 'Erro ao carregar relatórios')
-    }
+      if(request===requestId.current)setErr(e?.message || 'Erro ao carregar relatórios')
+    } finally {if(request===requestId.current)setLoading(false)}
   }
 
   useEffect(() => {
-    load()
+    const timer=setTimeout(()=>void load(),0)
+    return()=>{clearTimeout(timer);requestId.current++}
   }, [from, to])
 
-  const topItem = itensMaisVendidos[0]
+  useSocket(()=>void load())
+  const exportCsv=()=>{
+    const rows=[['Recebimento','Comanda','Mesa','Data','Itens','Couvert','Serviço','Total'],...vendasComandas.map(r=>[r.key,r.comanda_id,r.mesa,r.closed_at,r.subtotal,r.couvert_valor,r.taxa_servico_valor,r.total])];
+    const text='\uFEFF'+rows.map(row=>row.map(v=>'"'+String(v??'').replace(/^(\s*[=+@-])/ ,"'$1").replaceAll('"','""')+'"').join(';')).join('\r\n');
+    const url=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='vendas-'+from+'-'+to+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  const ready = !loading && !err && faturamento?.from === from && faturamento?.to === to
+  const choosePeriod = (kind) => {
+    const today = todayISO()
+    const d = new Date(today + 'T12:00:00Z')
+    if (kind === 'yesterday') d.setUTCDate(d.getUTCDate() - 1)
+    if (kind === 'week') d.setUTCDate(d.getUTCDate() - 6)
+    const start = kind === 'month' ? today.slice(0, 8) + '01' : d.toISOString().slice(0, 10)
+    setDateFrom(start); setDateTo(kind === 'yesterday' ? start : today)
+    setPeriodMode('range')
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 pb-12">
-      <header className="border-b border-slate-200 pb-6">
+      <header className="page-heading"><div><span className="eyebrow">GESTÃO E RESULTADOS</span>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Relatórios</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          Faturamento e vendas por <strong>dia operacional</strong> (virada <strong>01:00</strong>), alinhado ao módulo Financeiro. Comandas fechadas no caixa com itens ou pessoas (couvert).
+          Recebimentos, produtos e desempenho do restaurante. Selecione o período para consultar.
         </p>
-      </header>
+      </div><button className="btn btn-secondary" onClick={exportCsv} disabled={!ready||!vendasComandas.length}><Icon name="download" size={17}/>Exportar vendas</button></header>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="report-period rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Período</p>
+        <div className="simple-period-shortcuts">{[['today','Hoje'],['yesterday','Ontem'],['week','Últimos 7 dias'],['month','Este mês']].map(([id,label]) => <button type="button" className="btn btn-secondary" key={id} onClick={() => choosePeriod(id)}>{label}</button>)}</div>
         <div className="mb-3 flex flex-wrap gap-2">
           <button
             type="button"
@@ -154,37 +180,18 @@ export default function Admin() {
         )}
         <p className="mt-3 text-sm text-slate-700">
           <span className="font-semibold text-slate-900">{periodLabel}</span>
-          <span className="text-slate-500"> — cancelamentos usam data do registro do item.</span>
+          <span className="text-slate-500"> · Dia operacional a partir de 01:00.</span>
         </p>
-        <button type="button" className="btn btn-primary mt-4" onClick={() => void load()}>
-          Atualizar dados
+        <button type="button" className="btn btn-primary mt-4" disabled={loading} onClick={() => void load()}>
+          {loading ? 'Carregando…' : 'Atualizar dados'}
         </button>
         {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
       </div>
 
-      {faturamento && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm">
-            <p className="text-xs font-bold uppercase text-amber-800">Faturamento no período</p>
-            <p className="mt-2 text-2xl font-black text-amber-900">{formatMoney(faturamento.faturamento)}</p>
-            <p className="mt-1 text-xs text-amber-800/80">Itens + taxa + couvert</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-bold uppercase text-slate-500">Comandas finalizadas</p>
-            <p className="mt-2 text-2xl font-black text-slate-900">{faturamento.comandasCount ?? 0}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-bold uppercase text-slate-500">Ticket médio</p>
-            <p className="mt-2 text-2xl font-black text-slate-900">{formatMoney(faturamento.ticketMedio)}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-bold uppercase text-slate-500">Produto nº 1</p>
-            <p className="mt-2 line-clamp-2 text-lg font-bold text-slate-900">{topItem ? topItem.name : '—'}</p>
-            {topItem && <p className="mt-1 text-sm text-slate-600">{topItem.total_quantity} un. · {formatMoney(topItem.total_value)}</p>}
-          </div>
-        </div>
-      )}
-
+      {!ready && <p role="status" className="simple-report-status">{err ? 'Não foi possível carregar os dados. Tente atualizar novamente.' : 'Carregando o período selecionado…'}</p>}
+      {ready && <>
+      <SimpleReports faturamento={faturamento} days={vendasPorDia} items={itensMaisVendidos} from={from} to={to}/>
+      <details className="simple-report-details"><summary>Ver detalhes dos relatórios</summary><div className="space-y-5 pt-5">
       <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-2">
         {[
           ['faturamento', 'Resumo'],
@@ -217,7 +224,7 @@ export default function Admin() {
               <dd className="mt-1 text-xl font-bold text-slate-900">{formatMoney(faturamento.taxaServico)}</dd>
             </div>
             <div className="rounded-xl bg-slate-50 p-4">
-              <dt className="text-xs font-semibold uppercase text-slate-500">Couvert (previsto)</dt>
+              <dt className="text-xs font-semibold uppercase text-slate-500">Couvert recebido</dt>
               <dd className="mt-1 text-xl font-bold text-slate-900">{formatMoney(faturamento.couvert)}</dd>
             </div>
             <div className="rounded-xl bg-slate-50 p-4">
@@ -236,7 +243,7 @@ export default function Admin() {
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
             <h2 className="font-bold text-slate-900">Comandas — {periodLabel}</h2>
-            <p className="mt-1 text-sm text-slate-500">Itens + taxa + couvert por fechamento.</p>
+            <p className="mt-1 text-sm text-slate-500">Itens (incluindo couvert) + serviço por recebimento.</p>
           </div>
           <div className="max-h-[min(70vh,560px)] overflow-y-auto">
             <table className="w-full text-left text-sm">
@@ -244,14 +251,14 @@ export default function Admin() {
                 <tr className="border-b border-slate-200 text-xs uppercase text-slate-500">
                   <th className="px-6 py-3">Comanda</th>
                   <th className="px-4 py-3">Mesa</th>
-                  <th className="px-4 py-3">Fechamento</th>
+                  <th className="px-4 py-3">Recebimento</th>
                   <th className="hidden px-4 py-3 text-right md:table-cell">Itens</th>
                   <th className="px-6 py-3 text-right">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {vendasComandas.map((c) => (
-                  <tr key={c.comanda_id} className="border-b border-slate-50 hover:bg-slate-50/80">
+                  <tr key={c.key || c.comanda_id} className="border-b border-slate-50 hover:bg-slate-50/80">
                     <td className="px-6 py-3 font-semibold text-slate-900">{c.comanda_id}</td>
                     <td className="px-4 py-3 text-slate-700">{c.mesa ?? '—'}</td>
                     <td className="px-4 py-3 text-xs text-slate-600">
@@ -298,7 +305,7 @@ export default function Admin() {
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
             <h2 className="font-bold text-slate-900">Produtos mais vendidos — {periodLabel}</h2>
-            <p className="mt-1 text-sm text-slate-500">Quantidade e valor em comandas fechadas no período.</p>
+            <p className="mt-1 text-sm text-slate-500">Quantidade e valor dos itens pagos no período. Adiantamentos entram no faturamento; os produtos aparecem quando são quitados.</p>
           </div>
           <div className="max-h-[min(70vh,560px)] overflow-y-auto">
             <table className="w-full text-sm">
@@ -354,8 +361,8 @@ export default function Admin() {
       {tab === 'churrasqueira' && (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
-            <h2 className="font-bold text-slate-900">Produção churrasqueira — {periodLabel}</h2>
-            <p className="mt-1 text-sm text-slate-500">Itens com setor grill nas comandas fechadas.</p>
+            <h2 className="font-bold text-slate-900">Vendas da churrasqueira — {periodLabel}</h2>
+            <p className="mt-1 text-sm text-slate-500">Unidades pagas de produtos da churrasqueira.</p>
           </div>
           <table className="w-full text-sm">
             <thead>
@@ -409,7 +416,7 @@ export default function Admin() {
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
             <h2 className="font-bold text-slate-900">Cancelamentos — {periodLabel}</h2>
-            <p className="mt-1 text-sm text-slate-500">Por data de atualização ou criação do pedido (não usa virada 01:00).</p>
+            <p className="mt-1 text-sm text-slate-500">Cancelamentos efetivos, preservados mesmo após reutilizar a comanda.</p>
           </div>
           <div className="grid gap-4 p-6 sm:grid-cols-2">
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -445,6 +452,8 @@ export default function Admin() {
           </div>
         </div>
       )}
+      </div></details>
+      </>}
     </div>
   )
 }

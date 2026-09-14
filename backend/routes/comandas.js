@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { summaryFor, billRows, recordPayment, archiveAndReset,creditFor } from '../billing.js';
 import { Router } from 'express';
 import { broadcastAll } from '../socket.js';
 
@@ -14,13 +16,15 @@ comandasRouter.get('/', (req, res) => {
     LEFT JOIN (
       SELECT comanda_id,
         COUNT(*) AS pedidos_count,
-        SUM(quantity * unit_price) AS total_pedidos
+        SUM((quantity-paid_quantity) * unit_price) AS total_pedidos
       FROM pedidos
-      WHERE status != 'cancelled'
+      WHERE status != 'cancelled' AND paid_at IS NULL
       GROUP BY comanda_id
     ) a ON a.comanda_id = c.id
+    WHERE c.production_number IS NULL
     ORDER BY c.id
   `).all();
+  for(const c of list) c.saldo=summaryFor(db,c.id).total;
   const map = new Map(list.map((row) => [Number(row.id), row]));
   const byId = {};
   const empty = (id) => ({
@@ -75,10 +79,20 @@ export function mergeComandasHandler(req, res, db) {
     const updatePedido = db.prepare('UPDATE pedidos SET comanda_id = ?, updated_at = datetime(\'now\',\'localtime\') WHERE comanda_id = ?');
     const closeComanda = db.prepare("UPDATE comandas SET status = 'closed', mesa = NULL, updated_at = datetime('now','localtime') WHERE id = ?");
 
+    db.transaction(() => {
+    for(const cid of [targetId,...ids]) {
+      const c=db.prepare('SELECT * FROM comandas WHERE id=?').get(cid);
+      db.prepare('UPDATE pedidos SET billing_service_percent=COALESCE(billing_service_percent,?),billing_service_group=COALESCE(billing_service_group,?) WHERE comanda_id=? AND paid_at IS NULL').run(c.service_tax_percent||0,c.session_key,cid);
+      if(cid!==targetId) {
+        db.prepare('INSERT OR IGNORE INTO billing_session_links VALUES(?,?)').run(target.session_key,c.session_key);
+        db.prepare('INSERT OR IGNORE INTO billing_session_links SELECT ?,source_session FROM billing_session_links WHERE target_session=?').run(target.session_key,c.session_key);
+      }
+    }
     for (const sid of ids) {
       updatePedido.run(targetId, sid);
       closeComanda.run(sid);
     }
+    })();
 
     broadcastAll('comandas', {});
     broadcastAll('pedidos', {});
@@ -97,11 +111,14 @@ export function clearComandaHandler(req, res, db) {
     if (!db) return res.status(500).json({ error: 'Banco de dados não disponível' });
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id < 1) return res.status(400).json({ error: 'Comanda inválida' });
+    const account=db.prepare('SELECT * FROM comandas WHERE id=?').get(id);
+    if(account&&creditFor(db,account.session_key).total>0)return res.status(400).json({error:'Esta conta possui adiantamento. Conclua o recebimento antes de excluir.'});
+    if(db.prepare('SELECT 1 FROM pedidos WHERE comanda_id=? AND paid_quantity>0 AND paid_at IS NULL').get(id))return res.status(400).json({error:'Há itens parcialmente pagos. Conclua o saldo antes de excluir a comanda.'});
 
     const tx = db.transaction(() => {
       db.prepare(`
         UPDATE pedidos SET status = 'cancelled', updated_at = datetime('now','localtime')
-        WHERE comanda_id = ? AND status != 'cancelled'
+        WHERE comanda_id = ? AND status != 'cancelled' AND paid_at IS NULL
       `).run(id);
       const existing = db.prepare('SELECT * FROM comandas WHERE id = ?').get(id);
       if (existing) {
@@ -150,18 +167,13 @@ comandasRouter.post('/:id/open', (req, res) => {
     const run = db.transaction(() => {
       // Nova sessão neste número (ex.: comanda fechada/paga em dia anterior): pedidos antigos
       // continuavam no banco e reapareciam na UI. Comandas já open/ordering/paying não são tocadas.
-      if (!jaEmAndamento) {
-        db.prepare(`
-          UPDATE pedidos SET status = 'cancelled', updated_at = datetime('now','localtime')
-          WHERE comanda_id = ? AND status != 'cancelled'
-        `).run(id);
-      }
+      if (!jaEmAndamento) archiveAndReset(db, id);
       if (existing) {
         db.prepare("UPDATE comandas SET mesa = ?, status = ?, waiter_id = ?, closed_at = NULL, updated_at = datetime('now','localtime') WHERE id = ?")
           .run(mesaStr, 'open', wid, id);
       } else {
-        db.prepare('INSERT INTO comandas (id, mesa, status, waiter_id) VALUES (?, ?, ?, ?)')
-          .run(id, mesaStr, 'open', wid);
+        db.prepare('INSERT INTO comandas (id, mesa, status, waiter_id, session_key) VALUES (?, ?, ?, ?, ?)')
+          .run(id, mesaStr, 'open', wid, randomUUID());
       }
     });
     run();
@@ -180,10 +192,16 @@ comandasRouter.patch('/:id', (req, res) => {
     if (!db) return res.status(500).json({ error: 'Banco de dados não disponível' });
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id < 1) return res.status(400).json({ error: 'Comanda inválida' });
-    const exists = db.prepare('SELECT id FROM comandas WHERE id = ?').get(id);
+    const exists = db.prepare('SELECT * FROM comandas WHERE id = ?').get(id);
     if (!exists) return res.status(404).json({ error: 'Comanda não encontrada' });
 
     const { mesa, status, people_count, service_tax_percent, couvert_per_person, client_cpf } = req.body || {};
+    if(creditFor(db,exists.session_key).total>0 && [people_count,service_tax_percent,couvert_per_person].some(x=>x!==undefined))return res.status(400).json({error:'Esta conta tem adiantamento; mantenha os valores até concluir o recebimento.'});
+    if (status !== undefined && !['open','ordering','paying','closed'].includes(status)) return res.status(400).json({error:'Status inválido'});
+    for (const [key,value] of Object.entries({people_count,service_tax_percent,couvert_per_person})) {
+      if (value !== undefined && (!Number.isFinite(Number(value)) || Number(value)<0 || (key==='people_count' && !Number.isInteger(Number(value))))) return res.status(400).json({error:'Valor inválido'});
+    }
+    if (exists.status === 'closed') return res.status(400).json({error:'Reabra a comanda antes de alterar.'});
     const updates = [];
     const values = [];
     if (mesa !== undefined) { updates.push('mesa = ?'); values.push(mesa != null ? String(mesa).trim() : null); }
@@ -201,7 +219,10 @@ comandasRouter.patch('/:id', (req, res) => {
     }
     updates.push("updated_at = datetime('now','localtime')");
     values.push(id);
-    db.prepare(`UPDATE comandas SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+    db.transaction(() => {
+      if (status === 'closed' && !exists.origin_order_id) recordPayment(db,{...exists,...(service_tax_percent!==undefined?{service_tax_percent}:{}),...(people_count!==undefined?{people_count}:{})},billRows(db,id));
+      db.prepare(`UPDATE comandas SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+    })();
     broadcastAll('comandas', {});
     res.json({ id, updated: true });
   } catch (err) {
@@ -210,42 +231,20 @@ comandasRouter.patch('/:id', (req, res) => {
   }
 });
 
-comandasRouter.get('/:id/summary', (req, res) => {
-  const db = getDb(req);
-  const id = Number(req.params.id);
-  const comanda = db.prepare('SELECT * FROM comandas WHERE id = ?').get(id);
-  if (!comanda) return res.status(404).json({ error: 'Comanda não encontrada' });
-  const pedidos = db.prepare(`
-    SELECT p.*, i.name as item_name
-    FROM pedidos p
-    JOIN items i ON i.id = p.item_id
-    WHERE p.comanda_id = ? AND p.status != 'cancelled'
-    ORDER BY p.created_at
-  `).all(id);
-  let subtotal = 0;
-  pedidos.forEach(p => { subtotal += p.quantity * p.unit_price; });
-  const peopleCount = comanda.people_count || 0;
-  const couvertPerPerson = comanda.couvert_per_person || 5;
-  const couvertRow = db.prepare(`
-    SELECT COALESCE(SUM(p.quantity), 0) as qty, COALESCE(SUM(p.quantity * p.unit_price), 0) as val
-    FROM pedidos p JOIN items i ON i.id = p.item_id
-    WHERE p.comanda_id = ? AND p.status != 'cancelled' AND TRIM(LOWER(i.name)) = 'couvert'
-  `).get(id);
-  const couvertLancadoQty = couvertRow?.qty || 0;
-  const couvertLancado = couvertRow?.val || 0;
-  const couvertPendente = Math.max(0, peopleCount * couvertPerPerson - couvertLancado);
-  const serviceTax = (comanda.service_tax_percent || 0) / 100 * subtotal;
-  const total = subtotal + serviceTax + couvertPendente;
-  res.json({
-    comanda,
-    pedidos,
-    subtotal,
-    couvert: peopleCount * couvertPerPerson,
-    couvertLancado,
-    couvertPendente,
-    serviceTax,
-    total
-  });
+comandasRouter.get('/:id/summary', (req,res) => {
+  const result=summaryFor(getDb(req),Number(req.params.id));
+  if(!result) return res.status(404).json({error:'Comanda não encontrada'});
+  res.json(result);
+});
+comandasRouter.post('/:id/pay-selection', (req,res) => {
+  const db=getDb(req), id=Number(req.params.id);
+  const c=db.prepare('SELECT * FROM comandas WHERE id=?').get(id);
+  if(!c || c.status==='closed' || c.origin_order_id) return res.status(400).json({error:'Comanda indisponível para cobrança separada'});
+  const ids=[...new Set((Array.isArray(req.body?.ids)?req.body.ids:[]).map(Number))];
+  const rows=billRows(db,id).filter(p=>ids.includes(p.id));
+  if(!rows.length || rows.length!==ids.length) return res.status(400).json({error:'Selecione itens ainda não pagos desta comanda'});
+  db.transaction(()=>recordPayment(db,c,rows))();
+  broadcastAll('comandas',{}); res.json(summaryFor(db,id));
 });
 
 // Lançar couvert na comanda: adiciona pedido(s) de item "Couvert" conforme people_count
@@ -259,7 +258,7 @@ comandasRouter.post('/:id/lancar-couvert', (req, res) => {
     return res.status(400).json({ error: 'Comanda fechada. Não é possível lançar couvert.' });
   }
   const peopleCount = Math.max(0, Number(comanda.people_count) || 0);
-  const couvertPerPerson = Number(comanda.couvert_per_person) || 5;
+  const couvertPerPerson = Number(comanda.couvert_per_person ?? 5);
   if (peopleCount === 0) return res.status(400).json({ error: 'Informe a quantidade de pessoas antes de lançar o couvert' });
 
   let categoryId = db.prepare('SELECT id FROM categories WHERE slug = ?').get('diversos')?.id;
@@ -309,13 +308,15 @@ comandasRouter.post('/:id/change-number', (req, res) => {
 
   const existing = db.prepare('SELECT * FROM comandas WHERE id = ?').get(newId);
   const pedidosNew = existing ? db.prepare('SELECT COUNT(*) as n FROM pedidos WHERE comanda_id = ? AND status != ?').get(newId, 'cancelled') : { n: 0 };
-  if (existing && (OPEN_STATUSES.includes(existing.status) || (pedidosNew && pedidosNew.n > 0))) {
+  if (existing && OPEN_STATUSES.includes(existing.status)) {
     return res.status(400).json({ error: `Comanda ${newId} já está em uso. Escolha outro número.` });
   }
 
   const updPedidos = db.prepare('UPDATE pedidos SET comanda_id = ? WHERE comanda_id = ?');
 
+  db.transaction(() => {
   if (existing) {
+    archiveAndReset(db,newId);
     db.prepare(`
       UPDATE comandas SET mesa = ?, status = ?, waiter_id = ?, people_count = ?, service_tax_percent = ?, couvert_per_person = ?, client_cpf = ?, updated_at = datetime('now','localtime')
       WHERE id = ?
@@ -326,10 +327,13 @@ comandasRouter.post('/:id/change-number', (req, res) => {
     ).run(newId, comanda.mesa, comanda.status, comanda.waiter_id, comanda.people_count ?? 0, comanda.service_tax_percent ?? 0, comanda.couvert_per_person ?? 5, comanda.client_cpf ?? null);
   }
 
+  db.prepare('UPDATE comandas SET session_key=?,closed_at=NULL WHERE id=?').run(comanda.session_key,newId);
   updPedidos.run(newId, id);
   db.prepare("UPDATE comandas SET status = 'closed', mesa = NULL, updated_at = datetime('now','localtime') WHERE id = ?").run(id);
+  })();
 
   broadcastAll('comandas', {});
   broadcastAll('pedidos', {});
   return res.json({ old_id: id, new_id: newId });
 });
+

@@ -1,363 +1,528 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
-import { getOrders, updateOrderStatus, getPrintOrder } from '../api'
-import { useSocket } from '../socket'
-import { buildPedidoOnlinePrintHtml, formatFormaPagamentoLabel, openComandaPrintWindow } from '../utils/comandaImpressao'
-
-const STATUS_LABEL = {
-  aguardando_pagamento: 'Aguardando pagamento (PIX)',
-  recebido: 'Recebido',
-  em_producao: 'Em produção',
-  pronto: 'Pronto',
-  saiu_entrega: 'Saiu para entrega',
-  entregue: 'Entregue',
-  cancelado: 'Cancelado'
-}
-
-/** Data local YYYY-MM-DD a partir de `created_at` (SQLite localtime). */
-function ymdFromOrder(order) {
-  const raw = order?.created_at
-  if (!raw) return null
-  const m = String(raw).trim().match(/^(\d{4}-\d{2}-\d{2})/)
-  return m ? m[1] : null
-}
-
-function todayYmdLocal() {
-  const t = new Date()
-  const p = (n) => String(n).padStart(2, '0')
-  return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}`
-}
-
-function isOrderFromToday(order) {
-  const y = ymdFromOrder(order)
-  if (!y) return true
-  return y === todayYmdLocal()
-}
-
-function isFinalizado(status) {
-  return status === 'entregue' || status === 'cancelado'
-}
-
-function playNewOrderSound() {
+import { useState, useEffect, useRef } from "react";
+import { getOrders, updateOrderStatus, getPrintOrder } from "../api";
+import { useSocket } from "../socket";
+import {
+  buildPedidoOnlinePrintHtml,
+  formatFormaPagamentoLabel,
+  openComandaPrintWindow,
+} from "../utils/comandaImpressao";
+import Icon from "../components/Icon";
+import PedidoElapsed from "../components/PedidoElapsed";
+const labels = {
+  aguardando_pagamento: "Aguardando PIX",
+  recebido: "Recebido",
+  em_producao: "Em preparo",
+  pronto: "Pronto",
+  saiu_entrega: "Em entrega",
+  entregue: "Concluído",
+  cancelado: "Cancelado",
+};
+const cash = (v) =>
+  Number(v || 0).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+const finished = (o) => ["entregue", "cancelado"].includes(o.status);
+const columns = [
+  {
+    name: "Novos pedidos",
+    hint: "Aguardando confirmação",
+    states: ["aguardando_pagamento", "recebido"],
+    tone: "blue",
+  },
+  {
+    name: "Em preparo",
+    hint: "Na cozinha e produção",
+    states: ["em_producao"],
+    tone: "amber",
+  },
+  {
+    name: "Prontos",
+    hint: "Aguardando saída ou retirada",
+    states: ["pronto"],
+    tone: "green",
+  },
+  { name: "Em entrega", hint: "A caminho do cliente", states: ["saiu_entrega"], tone: "amber" },
+];
+function sound() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.frequency.value = 800
-    osc.type = 'sine'
-    gain.gain.setValueAtTime(0.2, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
-    osc.start(ctx.currentTime)
-    osc.stop(ctx.currentTime + 0.3)
-  } catch (_) {}
+    const c = new (window.AudioContext || window.webkitAudioContext)(),
+      o = c.createOscillator(),
+      g = c.createGain();
+    o.connect(g);
+    g.connect(c.destination);
+    o.frequency.value = 800;
+    g.gain.setValueAtTime(0.15, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.3);
+    o.start();
+    o.stop(c.currentTime + 0.3);
+    o.onended = () => c.close();
+  } catch {
+    /* Áudio depende de interação do operador. */
+  }
 }
-
 export default function PedidosOnlineInterno() {
-  const [orders, setOrders] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [filterTipo, setFilterTipo] = useState('') // '' | delivery | retirada
-  const [tab, setTab] = useState('todos') // todos | delivery
-  const [alert, setAlert] = useState(null)
-  const [cancelDialog, setCancelDialog] = useState(null) // { id } | null
-  const [cancelMotivo, setCancelMotivo] = useState('')
-  const [cancelSaving, setCancelSaving] = useState(false)
-  const prevOrdersRef = useRef(0)
-
+  const [orders, setOrders] = useState([]),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [type, setType] = useState(""),
+    [view, setView] = useState("active"),
+    [search, setSearch] = useState(""),
+    [selected, setSelected] = useState(null),
+    [busy, setBusy] = useState(false),
+    [cancel, setCancel] = useState(false),
+    [reason, setReason] = useState(""),
+    [notice, setNotice] = useState(null),
+    [feedback, setFeedback] = useState("");
+  const timer = useRef(null);
   const load = async () => {
-    setLoading(true)
-    const tipo = filterTipo || undefined
-    const data = await getOrders(tipo)
-    setOrders(data)
-    setLoading(false)
-  }
-
-  useEffect(() => { load() }, [filterTipo])
-  useSocket((payload, eventName) => {
-    load()
-    if (eventName === 'novo-pedido-online' && payload) {
-      playNewOrderSound()
-      setAlert({
-        id: payload.orderId,
-        tipo: payload.tipo,
-        cliente_nome: payload.cliente_nome,
-        valor_total: payload.valor_total
-      })
-      setTimeout(() => setAlert(null), 8000)
-    }
-  })
-
-  useEffect(() => {
-    prevOrdersRef.current = orders.length
-  }, [orders])
-
-  const list = tab === 'delivery' ? orders.filter((o) => o.tipo === 'delivery') : orders
-
-  const { ativosHoje, feitosHoje, antigos } = useMemo(() => {
-    const ativosHoje = []
-    const feitosHoje = []
-    const antigos = []
-    for (const o of list) {
-      if (!isOrderFromToday(o)) {
-        antigos.push(o)
-        continue
-      }
-      if (isFinalizado(o.status)) feitosHoje.push(o)
-      else ativosHoje.push(o)
-    }
-    return { ativosHoje, feitosHoje, antigos }
-  }, [list])
-
-  const handleStatus = async (orderId, status) => {
-    await updateOrderStatus(orderId, status)
-    load()
-  }
-
-  const openCancelDialog = (orderId) => {
-    setCancelMotivo('')
-    setCancelDialog({ id: orderId })
-  }
-
-  const confirmCancelOrder = async () => {
-    if (!cancelDialog?.id) return
-    setCancelSaving(true)
     try {
-      await updateOrderStatus(cancelDialog.id, 'cancelado', cancelMotivo)
-      setCancelDialog(null)
-      setCancelMotivo('')
-      load()
-    } catch (_) {
-      alert('Não foi possível cancelar o pedido.')
+      setOrders(await getOrders());
+      setError("");
+    } catch (e) {
+      setError(e.message);
     } finally {
-      setCancelSaving(false)
+      setLoading(false);
     }
-  }
-
-  const handlePrint = (order) => {
-    getPrintOrder(order.id).then((d) => {
-      openComandaPrintWindow(buildPedidoOnlinePrintHtml(d), `Pedido #${d.numero}`)
-    })
-  }
-
+  };
+  useEffect(() => {
+    void load();
+    return () => clearTimeout(timer.current);
+  }, []);
+  useSocket((payload, event) => {
+    void load();
+    if (event === "novo-pedido-online") {
+      sound();
+      setNotice(payload);
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setNotice(null), 8000);
+    }
+  });
+  const list = orders.filter(
+      (o) =>
+        (!type || o.tipo === type) &&
+        (!search ||
+          `${o.id} ${o.cliente_nome} ${o.cliente_telefone}`
+            .toLowerCase()
+            .includes(search.toLowerCase())),
+    ),
+    active = list.filter((o) => !finished(o)),
+    history = list.filter(finished),
+    detail = orders.find((o) => o.id === selected);
+  const update = async (status) => {
+    if (!detail || busy) return;
+    setBusy(true);
+    try {
+      await updateOrderStatus(
+        detail.id,
+        status,
+        status === "cancelado" ? reason : undefined,
+      );
+      setCancel(false);
+      setReason("");
+      setFeedback(`Pedido #${detail.id}: ${labels[status]}.`);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const print = async (o) => {
+    try {
+      const d = await getPrintOrder(o.id);
+      openComandaPrintWindow(
+        buildPedidoOnlinePrintHtml(d),
+        `Pedido #${d.numero}`,
+      );
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  const next = (o) =>
+    o.status === "recebido"
+      ? ["em_producao", "Confirmar pedido"]
+      : o.status === "em_producao"
+        ? ["pronto", "Marcar como pronto"]
+        : o.status === "pronto"
+          ? o.tipo === "delivery"
+            ? ["saiu_entrega", "Saiu para entrega"]
+            : ["entregue", "Confirmar retirada"]
+          : o.status === "saiu_entrega"
+            ? ["entregue", "Confirmar entrega"]
+            : null;
+  const Card = ({ o }) => (
+    <button
+      className="order-ticket"
+      onClick={() => {
+        setSelected(o.id);
+        setCancel(false);
+      }}
+    >
+      <div className="ticket-heading">
+        <strong>#{String(o.id).padStart(3, "0")}</strong>
+        <span>
+          <Icon name={o.tipo === "delivery" ? "truck" : "orders"} size={14} />
+          {o.tipo === "delivery" ? "Delivery" : "Retirada"}
+        </span>
+      </div>
+      <h3>{o.cliente_nome}</h3>
+      <p className="ticket-items">
+        {o.items?.reduce((n, i) => n + i.quantity, 0) || 0} itens ·{" "}
+        {o.items
+          ?.slice(0, 2)
+          .map((i) => i.item_name)
+          .join(", ")}
+      </p>
+      <div className="ticket-foot">
+        <span>
+          <Icon name="clock" size={13} />
+          <PedidoElapsed createdAt={o.created_at} />
+        </span>
+        <strong>{cash(o.valor_total)}</strong>
+      </div>
+      {o.status === "aguardando_pagamento" && (
+        <span className="ticket-payment">Aguardando pagamento PIX</span>
+      )}
+    </button>
+  );
   return (
-    <div>
-      <h1 className="mb-4 text-xl font-bold text-slate-800">Pedidos online</h1>
-
-      {alert && (
-        <div className="mb-4 rounded-xl border-2 border-amber-500 bg-amber-50 p-4 shadow-lg animate-pulse">
-          <p className="font-bold text-amber-800">🔔 Novo pedido de {alert.tipo === 'delivery' ? 'delivery' : 'retirada'} recebido</p>
-          <p className="text-slate-700">#{alert.id} — {alert.cliente_nome} — R$ {Number(alert.valor_total).toFixed(2)}</p>
+    <div className="online-workspace">
+      <header className="page-heading">
+        <div>
+          <span className="eyebrow">CENTRAL DE PEDIDOS</span>
+          <h1>Pedidos online</h1>
+          <p>Do recebimento à entrega, cada pedido no seu lugar.</p>
+        </div>
+        <button className="btn btn-secondary" onClick={load}>
+          <Icon name="refresh" size={17} />
+          Atualizar
+        </button>
+      </header>
+      {notice && (
+        <div className="notice-banner" role="status">
+          <Icon name="bell" />
+          <strong>Novo pedido #{notice.orderId}</strong>
+          <span>{notice.cliente_nome}</span>
+          <button
+            onClick={() => {
+              setSelected(notice.orderId);
+              setNotice(null);
+            }}
+          >
+            Ver pedido →
+          </button>
         </div>
       )}
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setTab('todos')}
-          className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === 'todos' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700'}`}
-        >
-          Todos
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('delivery')}
-          className={`rounded-lg px-4 py-2 text-sm font-medium ${tab === 'delivery' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700'}`}
-        >
-          🚚 Delivery
-        </button>
+      {error && (
+        <p className="error-banner" role="alert">
+          {error}
+        </p>
+      )}
+      {feedback && <p className="operation-feedback" role="status">{feedback}</p>}
+      <div className="work-toolbar">
+        <div className="segmented">
+          <button
+            className={view === "active" ? "selected" : ""}
+            onClick={() => setView("active")}
+          >
+            Em andamento<span className="count">{active.length}</span>
+          </button>
+          <button
+            className={view === "history" ? "selected" : ""}
+            onClick={() => setView("history")}
+          >
+            Histórico<span className="count">{history.length}</span>
+          </button>
+        </div>
+        <label className="search-field">
+          <Icon name="search" size={18} />
+          <input
+            placeholder="Buscar pedido ou cliente"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </label>
         <select
-          value={filterTipo}
-          onChange={(e) => setFilterTipo(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+          aria-label="Tipo do pedido"
+          value={type}
+          onChange={(e) => setType(e.target.value)}
         >
-          <option value="">Todos os tipos</option>
+          <option value="">Todos os canais</option>
           <option value="delivery">Delivery</option>
           <option value="retirada">Retirada</option>
         </select>
       </div>
-
       {loading ? (
-        <p className="text-slate-500">Carregando...</p>
-      ) : list.length === 0 ? (
-        <p className="rounded-xl border border-slate-200 bg-white p-6 text-center text-slate-500">Nenhum pedido online.</p>
+        <div className="empty-panel">Carregando pedidos…</div>
+      ) : view === "active" ? (
+        <div className="order-board">
+          {columns.map((col) => {
+            const rows = active.filter((o) => col.states.includes(o.status)).sort((a,b)=>String(a.created_at).localeCompare(String(b.created_at)));
+            return (
+              <section className={`order-lane ${col.tone}`} key={col.name}>
+                <header>
+                  <div>
+                    <h2>
+                      <i className={`status-dot ${col.tone}`} />
+                      {col.name}
+                      <span>{rows.length}</span>
+                    </h2>
+                    <p>{col.hint}</p>
+                  </div>
+                </header>
+                <div className="lane-cards">
+                  {rows.map((o) => (
+                    <Card key={o.id} o={o} />
+                  ))}
+                  {!rows.length && (
+                    <div className="lane-empty">
+                      <Icon name="orders" size={26} />
+                      <span>Nenhum pedido nesta etapa</span>
+                    </div>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
       ) : (
-        <div className="space-y-8">
-          {ativosHoje.length > 0 && (
-            <section>
-              <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-700">Pedidos de hoje — em andamento</h2>
-              <div className="space-y-4">
-                {ativosHoje.map((order) => (
-                  <div
-                    key={order.id}
-                    className={`rounded-xl border-2 bg-white p-4 shadow-sm ${
-                      order.tipo === 'delivery' ? 'border-amber-400' : 'border-slate-200'
-                    }`}
-                  >
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-bold text-slate-800">
-                        #{order.id}
-                        {order.tipo === 'delivery' ? ' 🚚 Delivery' : ' 🛍 Retirada'}
-                      </span>
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-sm font-medium text-slate-700">
-                        {STATUS_LABEL[order.status] || order.status}
-                      </span>
-                    </div>
-                    <p className="text-slate-700">{order.cliente_nome} — {order.cliente_telefone}</p>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Pagamento: <span className="font-medium text-slate-800">{formatFormaPagamentoLabel(order.forma_pagamento)}</span>
-                    </p>
-                    {order.tipo === 'delivery' && order.endereco_rua && (
-                      <p className="mt-1 text-sm text-slate-600">
-                        {order.endereco_rua}, {order.endereco_numero}
-                        {order.endereco_complemento ? ' ' + order.endereco_complemento : ''} — {order.endereco_bairro}
-                        {order.endereco_referencia ? ` — Ref.: ${order.endereco_referencia}` : ''}
-                      </p>
-                    )}
-                    <ul className="mt-2 space-y-1 text-sm text-slate-600">
-                      {order.items?.map((i) => (
-                        <li key={i.id}>{i.quantity}x {i.item_name} — R$ {(i.quantity * i.unit_price).toFixed(2)}</li>
-                      ))}
-                    </ul>
-                    <p className="mt-2 font-semibold text-slate-800">Total: R$ {Number(order.valor_total).toFixed(2)}</p>
-                    {order.observacoes && <p className="mt-1 text-sm text-slate-500">Obs: {order.observacoes}</p>}
-                    {order.status === 'cancelado' && order.motivo_cancelamento && (
-                      <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
-                        <span className="font-semibold">Motivo do cancelamento:</span> {order.motivo_cancelamento}
-                      </p>
-                    )}
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {order.status === 'recebido' && (
-                        <button type="button" className="btn btn-success text-sm font-semibold" onClick={() => handleStatus(order.id, 'em_producao')}>
-                          Confirmar pedido
-                        </button>
-                      )}
-                      {order.status === 'em_producao' && (
-                        <button type="button" className="btn btn-primary text-sm" onClick={() => handleStatus(order.id, 'pronto')}>
-                          Pronto
-                        </button>
-                      )}
-                      {order.tipo === 'delivery' && order.status === 'pronto' && (
-                        <button type="button" className="btn btn-success text-sm" onClick={() => handleStatus(order.id, 'saiu_entrega')}>
-                          Saiu para entrega
-                        </button>
-                      )}
-                      {(order.tipo === 'retirada' && order.status === 'pronto') || (order.tipo === 'delivery' && order.status === 'saiu_entrega') ? (
-                        <button type="button" className="btn btn-success text-sm" onClick={() => handleStatus(order.id, 'entregue')}>
-                          {order.tipo === 'delivery' ? 'Entregue' : 'Retirado'}
-                        </button>
-                      ) : null}
-                      {!['entregue', 'cancelado'].includes(order.status) && (
-                        <button type="button" className="btn btn-danger text-sm" onClick={() => openCancelDialog(order.id)}>
-                          Cancelar / recusar
-                        </button>
-                      )}
-                      <button type="button" className="btn btn-secondary text-sm" onClick={() => handlePrint(order)}>
-                        Imprimir comanda
+        <div className="data-panel">
+          <div className="section-heading">
+            <h2>Histórico de pedidos</h2>
+            <span>{history.length} registros</span>
+          </div>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pedido</th>
+                  <th>Cliente</th>
+                  <th>Data</th>
+                  <th>Canal</th>
+                  <th>Status</th>
+                  <th className="numeric">Total</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((o) => (
+                  <tr key={o.id}>
+                    <td>
+                      <button
+                        className="text-action"
+                        onClick={() => setSelected(o.id)}
+                      >
+                        #{o.id}
                       </button>
-                    </div>
-                  </div>
+                    </td>
+                    <td>{o.cliente_nome}</td>
+                    <td>
+                      {o.created_at
+                        ?.slice(0, 10)
+                        .split("-")
+                        .reverse()
+                        .join("/")}{" "}
+                      {o.created_at?.slice(11, 16)}
+                    </td>
+                    <td>{o.tipo === "delivery" ? "Delivery" : "Retirada"}</td>
+                    <td>
+                      <span
+                        className={`state-badge ${o.status === "cancelado" ? "red" : "green"}`}
+                      >
+                        {labels[o.status]}
+                      </span>
+                    </td>
+                    <td className="numeric">{cash(o.valor_total)}</td>
+                    <td>
+                      <button
+                        className="icon-button"
+                        aria-label={`Imprimir pedido ${o.id}`}
+                        onClick={() => print(o)}
+                      >
+                        <Icon name="print" size={17} />
+                      </button>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </section>
-          )}
-
-          {feitosHoje.length > 0 && (
-            <section>
-              <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-slate-500">Concluídos hoje (referência)</h2>
-              <div className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-slate-50/80">
-                {feitosHoje.map((order) => (
-                  <div key={order.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm text-slate-700">
-                    <span className="font-mono text-xs text-slate-500">#{order.id}</span>
-                    <span className="font-medium text-slate-800">{order.cliente_nome}</span>
-                    <span className="rounded bg-white px-2 py-0.5 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
-                      {STATUS_LABEL[order.status] || order.status}
-                    </span>
-                    <span className="text-xs">{order.tipo === 'delivery' ? '🚚' : '🛍'}</span>
-                    <span className="ml-auto font-semibold text-slate-800">R$ {Number(order.valor_total).toFixed(2)}</span>
-                    <button type="button" className="text-xs font-semibold text-amber-700 underline hover:text-amber-900" onClick={() => handlePrint(order)}>
-                      Imprimir
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {antigos.length > 0 && (
-            <>
-              {ativosHoje.length === 0 && feitosHoje.length === 0 ? (
-                <p className="rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
-                  Nenhum pedido de hoje na área principal. Em seguida está só o <strong>histórico</strong> de dias anteriores (lista compacta).
-                </p>
-              ) : null}
-              <details className="group rounded-xl border border-slate-200 bg-slate-100/60">
-              <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-600 marker:hidden [&::-webkit-details-marker]:hidden">
-                <span className="inline-flex items-center gap-2">
-                  <span className="text-slate-400 transition group-open:rotate-90">▸</span>
-                  Pedidos de dias anteriores ({antigos.length}) — só registro
-                </span>
-              </summary>
-              <div className="border-t border-slate-200 bg-white/90 px-2 py-1">
-                {antigos.map((order) => (
-                  <div
-                    key={order.id}
-                    className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-slate-100 px-2 py-1.5 text-xs text-slate-600 last:border-0"
-                  >
-                    <span className="w-[5.5rem] shrink-0 font-mono text-[10px] text-slate-400">{ymdFromOrder(order) || '—'}</span>
-                    <span className="font-semibold text-slate-700">#{order.id}</span>
-                    <span className="max-w-[10rem] truncate sm:max-w-xs">{order.cliente_nome}</span>
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-500">
-                      {STATUS_LABEL[order.status] || order.status}
-                    </span>
-                    <span className="ml-auto font-medium text-slate-700">R$ {Number(order.valor_total).toFixed(2)}</span>
-                    <button type="button" className="shrink-0 text-[10px] font-semibold text-amber-700 underline" onClick={() => handlePrint(order)}>
-                      Imprimir
-                    </button>
-                  </div>
-                ))}
-              </div>
-              </details>
-            </>
+              </tbody>
+            </table>
+          </div>
+          {!history.length && (
+            <div className="empty-panel">
+              Nenhum pedido concluído ou cancelado.
+            </div>
           )}
         </div>
       )}
-
-      {cancelDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
-            <h2 className="text-lg font-bold text-slate-900">Cancelar ou recusar pedido</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              O cliente verá esta mensagem no acompanhamento do pedido online. Explique o motivo (opcional, mas recomendado).
-            </p>
-            <textarea
-              className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900"
-              rows={4}
-              placeholder="Ex.: Item indisponível hoje. / Endereço fora da área de entrega."
-              value={cancelMotivo}
-              onChange={(e) => setCancelMotivo(e.target.value)}
-            />
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
+      {detail && (
+        <div
+          className="drawer-backdrop"
+          onClick={() => {
+            setSelected(null);
+            setCancel(false);
+          }}
+        >
+          <aside
+            className="order-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Pedido ${detail.id}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="drawer-header">
+              <div>
+                <span className="eyebrow">
+                  {detail.tipo === "delivery" ? "DELIVERY" : "RETIRADA"}
+                </span>
+                <h2>Pedido #{detail.id}</h2>
+              </div>
               <button
-                type="button"
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700"
-                disabled={cancelSaving}
-                onClick={() => { setCancelDialog(null); setCancelMotivo('') }}
+                className="icon-button"
+                aria-label="Fechar detalhes"
+                onClick={() => setSelected(null)}
               >
-                Voltar
+                <Icon name="close" />
               </button>
-              <button
-                type="button"
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                disabled={cancelSaving}
-                onClick={confirmCancelOrder}
-              >
-                {cancelSaving ? 'Salvando…' : 'Confirmar cancelamento'}
-              </button>
+            </header>
+            <div className="drawer-content">
+              <div className="detail-status">
+                <span
+                  className={`state-badge ${detail.status === "cancelado" ? "red" : ["pronto","entregue"].includes(detail.status) ? "green" : "amber"}`}
+                >
+                  {labels[detail.status]}
+                </span>
+                <span>{detail.created_at?.slice(11, 16)}</span>
+              </div>
+              <section className="detail-section">
+                <h3>
+                  <Icon name="user" size={17} />
+                  Cliente
+                </h3>
+                <strong>{detail.cliente_nome}</strong>
+                <p>{detail.cliente_telefone}</p>
+                {detail.cliente_email && <p>{detail.cliente_email}</p>}
+              </section>
+              {detail.tipo === "delivery" && (
+                <section className="detail-section">
+                  <h3>
+                    <Icon name="pin" size={17} />
+                    Endereço de entrega
+                  </h3>
+                  <p>
+                    {detail.endereco_rua}, {detail.endereco_numero}
+                  </p>
+                  <p>
+                    {detail.endereco_bairro}
+                    {detail.endereco_complemento
+                      ? ` · ${detail.endereco_complemento}`
+                      : ""}
+                  </p>
+                  {detail.endereco_referencia && (
+                    <p>Referência: {detail.endereco_referencia}</p>
+                  )}
+                </section>
+              )}
+              <section className="detail-section">
+                <h3>
+                  <Icon name="receipt" size={17} />
+                  Itens do pedido
+                </h3>
+                {detail.items?.map((i) => (
+                  <div className="detail-item" key={i.id}>
+                    <span className="quantity-badge">{i.quantity}×</span>
+                    <div>
+                      <strong>{i.item_name}</strong>
+                      {i.observations && <small>{i.observations}</small>}
+                    </div>
+                    <span>{cash(i.quantity * i.unit_price)}</span>
+                  </div>
+                ))}
+              </section>
+              {detail.observacoes && (
+                <div className="detail-observation">
+                  <strong>Observações</strong>
+                  <p>{detail.observacoes}</p>
+                </div>
+              )}
+              <section className="detail-section">
+                <h3>Pagamento</h3>
+                <p>
+                  {formatFormaPagamentoLabel(detail.forma_pagamento)}
+                  {detail.payment_status === "aprovado" ? " · Pago" : ""}
+                </p>
+                <div className="detail-total">
+                  <span>Total do pedido</span>
+                  <strong>{cash(detail.valor_total)}</strong>
+                </div>
+              </section>
+              {detail.motivo_cancelamento && (
+                <p className="error-banner">
+                  Motivo: {detail.motivo_cancelamento}
+                </p>
+              )}
+              {error && <p className="error-banner">{error}</p>}
+              {cancel && (
+                <div className="cancel-box">
+                  <label className="field-label">
+                    Motivo do cancelamento
+                    <textarea
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder="O cliente verá esta informação"
+                      rows={3}
+                    />
+                  </label>
+                  <div className="dialog-actions">
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => setCancel(false)}
+                    >
+                      Voltar
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      disabled={busy}
+                      onClick={() => update("cancelado")}
+                    >
+                      Confirmar cancelamento
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+            <footer className="drawer-actions">
+              {next(detail) && (
+                <button
+                  className="btn btn-primary"
+                  disabled={busy}
+                  onClick={() => update(next(detail)[0])}
+                >
+                  <Icon name="check" size={18} />
+                  {busy ? "Salvando…" : next(detail)[1]}
+                </button>
+              )}
+              <div>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => print(detail)}
+                >
+                  <Icon name="print" size={16} />
+                  Imprimir comanda
+                </button>
+                {!finished(detail) && (
+                  <button
+                    className="text-danger"
+                    onClick={() => setCancel(true)}
+                  >
+                    Cancelar / recusar
+                  </button>
+                )}
+              </div>
+            </footer>
+          </aside>
         </div>
       )}
     </div>
-  )
+  );
 }

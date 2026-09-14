@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getApiBase } from '../devApiBase'
-import PedidoOnlineAcompanhamento, { lerPedidoLocal, salvarPedidoLocal } from '../components/PedidoOnlineAcompanhamento'
+import PedidoOnlineAcompanhamento from '../components/PedidoOnlineAcompanhamento'
+import { lerPedidoLocal, salvarPedidoLocal } from '../utils/pedidoStorage'
 import {
   lancheComOpcionaisAdicionais,
   itemAceitaCebolaCaramelizada,
@@ -128,19 +129,10 @@ function resolvePedirItemImages(itemName, apiBase) {
   return { image: api || null, imageFallback: null }
 }
 
-function ProductCard({ item, badges = [], highlight, onOpen }) {
-  const [imgSrc, setImgSrc] = useState(item.image || null)
-  useEffect(() => {
-    setImgSrc(item.image || null)
-  }, [item.image, item.id])
-
-  const onImgError = useCallback(() => {
-    if (item.imageFallback && imgSrc === item.image) {
-      setImgSrc(item.imageFallback)
-      return
-    }
-    setImgSrc(null)
-  }, [imgSrc, item.image, item.imageFallback])
+function ProductCard({ item, badges = [], onOpen }) {
+  const [failedImages,setFailedImages]=useState([])
+  const imgSrc=[item.image,item.imageFallback].find(src=>src&&!failedImages.includes(src))||null
+  const onImgError=()=>setFailedImages(prev=>[...prev,imgSrc])
 
   return (
     <article
@@ -169,7 +161,7 @@ function ProductCard({ item, badges = [], highlight, onOpen }) {
             <img src={imgSrc} alt={item.name} className="h-full w-full object-cover" onError={onImgError} />
           ) : (
             <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
-              <span className="text-3xl font-bold text-slate-400">{item.name?.charAt(0) || '🍽️'}</span>
+              <span className="text-3xl font-bold text-slate-400">{item.name?.charAt(0) || ''}</span>
             </div>
           )}
         </div>
@@ -395,9 +387,9 @@ export default function PedirOnline() {
     }
 
     return [
-      makeCombo('combo-pf-churraspao', 'Combo PF + Churraspão + Coca', '🔥', [pratoFeito, churraspao, coca], 12),
-      makeCombo('combo-2-churraspao', 'Combo 2 Churraspão + 2 Coca', '🥖', [churraspao, churraspao, coca, coca], 15),
-      makeCombo('combo-2-pf', 'Combo 2 PF + 2 Coca', '🍛', [pratoFeito, pratoFeito, coca, coca], 15),
+      makeCombo('combo-pf-churraspao', 'Combo PF + Churraspão + Coca', '', [pratoFeito, churraspao, coca], 12),
+      makeCombo('combo-2-churraspao', 'Combo 2 Churraspão + 2 Coca', '', [churraspao, churraspao, coca, coca], 15),
+      makeCombo('combo-2-pf', 'Combo 2 PF + 2 Coca', '', [pratoFeito, pratoFeito, coca, coca], 15),
     ].filter(Boolean)
   }, [menu.items, categoriesBySlug])
 
@@ -682,7 +674,7 @@ export default function PedirOnline() {
         <h1 className="text-2xl font-bold text-slate-900">Bosque da Carne</h1>
         <p className="mt-2 text-sm font-medium uppercase tracking-wide text-slate-500">Pedidos online</p>
         <div className="mt-8 max-w-md rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
-          <p className="text-4xl">⏸️</p>
+          <p className="text-4xl"></p>
           <h2 className="mt-3 text-xl font-semibold text-amber-900">Indisponível hoje</h2>
           <p className="mt-3 text-base leading-relaxed text-amber-950">{mensagemFechado}</p>
         </div>
@@ -692,11 +684,11 @@ export default function PedirOnline() {
   }
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-slate-50 pb-28 text-slate-900">
+    <div className="public-menu min-h-screen w-full overflow-x-hidden bg-slate-50 pb-28 text-slate-900">
       <div className="sticky top-0 z-40 w-full border-b border-slate-800 bg-black shadow-lg">
         <header className="px-4 py-4 text-white">
           <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
-            <h1 className="text-lg font-semibold tracking-wide">Bosque da Carne</h1>
+            <h1><img src="/logo-bosque-transparente.png" alt="Bosque da Carne" width="64" height="64" className="establishment-logo" /></h1>
             <div className="flex shrink-0 items-center gap-2">
               <Link to="/acompanhar" className="rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-medium">
                 Acompanhar
@@ -714,7 +706,7 @@ export default function PedirOnline() {
         </header>
         {entregaGratis && (
           <p className="mx-auto w-full max-w-5xl bg-emerald-600 px-4 py-2 text-center text-sm font-semibold text-white">
-            🚚 Entrega grátis hoje!
+             Entrega grátis hoje!
           </p>
         )}
         {step === 'menu' && (
@@ -740,7 +732,7 @@ export default function PedirOnline() {
               to="/acompanhar"
               className="mb-4 flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 hover:bg-amber-100"
             >
-              <span>📦 Acompanhar meu último pedido</span>
+              <span> Acompanhar meu último pedido</span>
               <span className="text-amber-700">Ver →</span>
             </Link>
           )}
@@ -794,7 +786,7 @@ export default function PedirOnline() {
 
           <section className="mb-8">
             <div className="mb-3 flex items-center gap-2">
-              <span>⭐</span>
+              <span></span>
               <h2 className="text-xl font-semibold">Destaque da Casa</h2>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white px-3">
@@ -803,7 +795,7 @@ export default function PedirOnline() {
                   key={`highlight-${item.id}`}
                   item={item}
                   highlight
-                  badges={normalize(item.name).includes('bacon') ? ['🔥 MAIS PEDIDO', '⭐ FAVORITO'] : ['⭐ FAVORITO']}
+                  badges={normalize(item.name).includes('bacon') ? [' MAIS PEDIDO', ' FAVORITO'] : [' FAVORITO']}
                   onOpen={setModalProduct}
                 />
               ))}
@@ -813,7 +805,7 @@ export default function PedirOnline() {
           {combos.length > 0 && (
             <section className="mb-8">
               <div className="mb-3 flex items-center gap-2">
-                <span>📦</span>
+                <span></span>
                 <h2 className="text-xl font-semibold">Combos</h2>
               </div>
               <div className="space-y-3">
@@ -834,8 +826,8 @@ export default function PedirOnline() {
                   {items.map((item) => {
                     const n = normalize(item.name)
                     const badges = []
-                    if (n.includes('gado') && n.includes('bacon')) badges.push('🔥 MAIS PEDIDO')
-                    if (n.includes('churraspao') || n.includes('prato feito')) badges.push('⭐ FAVORITO')
+                    if (n.includes('gado') && n.includes('bacon')) badges.push(' MAIS PEDIDO')
+                    if (n.includes('churraspao') || n.includes('prato feito')) badges.push(' FAVORITO')
                     return <ProductCard key={item.id} item={item} badges={badges} highlight={n.includes('churraspao') || n.includes('prato feito')} onOpen={setModalProduct} />
                   })}
                 </div>
@@ -1175,3 +1167,4 @@ export default function PedirOnline() {
     </div>
   )
 }
+

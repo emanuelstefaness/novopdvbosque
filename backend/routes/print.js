@@ -1,3 +1,4 @@
+import { summaryFor } from '../billing.js';
 import { Router } from 'express';
 
 export const printRouter = Router();
@@ -9,29 +10,18 @@ printRouter.get('/comanda/:id', (req, res) => {
   const comanda = db.prepare('SELECT * FROM comandas WHERE id = ?').get(id);
   if (!comanda) return res.status(404).json({ error: 'Comanda não encontrada' });
   const pedidos = db.prepare(`
-    SELECT p.*, i.name as item_name
+    SELECT p.*, p.quantity-p.paid_quantity AS quantity, i.name as item_name
     FROM pedidos p
     JOIN items i ON i.id = p.item_id
-    WHERE p.comanda_id = ? AND p.status != 'cancelled'
+    WHERE p.comanda_id = ? AND p.status != 'cancelled' AND p.paid_at IS NULL
     ORDER BY p.created_at
   `).all(id);
-  let subtotal = 0;
-  pedidos.forEach((p) => { subtotal += p.quantity * p.unit_price; });
-  const peopleCount = comanda.people_count || 0;
-  const couvertPerPerson = comanda.couvert_per_person || 5;
-  const couvertRow = db.prepare(`
-    SELECT COALESCE(SUM(p.quantity), 0) as qty, COALESCE(SUM(p.quantity * p.unit_price), 0) as val
-    FROM pedidos p JOIN items i ON i.id = p.item_id
-    WHERE p.comanda_id = ? AND p.status != 'cancelled' AND TRIM(LOWER(i.name)) = 'couvert'
-  `).get(id);
-  const couvertLancadoQty = couvertRow?.qty || 0;
-  const couvertLancadoValor = couvertRow?.val || 0;
-  const couvertPrevisto = peopleCount * couvertPerPerson;
-  const couvertPendente = Math.max(0, couvertPrevisto - couvertLancadoValor);
-  const serviceTaxPercent = comanda.service_tax_percent || 0;
-  const serviceTaxValor = (serviceTaxPercent / 100) * subtotal;
-  const totalSemTaxaGarcom = subtotal + couvertPendente;
-  const totalComTaxa = subtotal + serviceTaxValor + couvertPendente;
+  const bill=summaryFor(db,id);
+  const subtotal=bill.subtotal, peopleCount=comanda.people_count || 0, couvertPerPerson=comanda.couvert_per_person ?? 5;
+  const couvertLancadoQty=bill.pedidos.filter(p=>p.item_name.trim().toLowerCase()==='couvert').reduce((s,p)=>s+p.quantity,0);
+  const couvertLancadoValor=bill.couvert, couvertPrevisto=bill.couvert, couvertPendente=0;
+  const serviceTaxPercent=comanda.service_tax_percent || 0, serviceTaxValor=bill.serviceTax;
+  const totalSemTaxaGarcom=bill.subtotal, totalComTaxa=bill.total;
   const printedAt = db.prepare(`SELECT datetime('now','localtime') as t`).get()?.t || '';
 
   res.json({
@@ -49,6 +39,9 @@ printRouter.get('/comanda/:id', (req, res) => {
     couvert_pendente: couvertPendente,
     service_tax_percent: serviceTaxPercent,
     service_tax: serviceTaxValor,
+    mixed_service: pedidos.some(p=>p.billing_service_percent!=null&&Number(p.billing_service_percent)!==Number(serviceTaxPercent)),
+    credit: bill.credit,
+    paid_total: bill.paidTotal,
     total_sem_taxa_garcom: totalSemTaxaGarcom,
     total: totalComTaxa,
     printed_at: printedAt

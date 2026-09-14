@@ -24,9 +24,9 @@ function playBeepPair() {
     window.setTimeout(() => {
       try {
         ctx.close()
-      } catch (_) {}
+      } catch { /* Recurso opcional de áudio/vibração indisponível. */ }
     }, 700)
-  } catch (_) {}
+  } catch { /* Recurso opcional de áudio/vibração indisponível. */ }
 }
 
 export function startCaixaOnlineOrderAlarm() {

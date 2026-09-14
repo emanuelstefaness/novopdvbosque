@@ -1,3 +1,4 @@
+import { authRouter,authorize,sessionFor,announceAccess,rateLimit } from './auth.js';
 import express from 'express';
 import os from 'os';
 import { createServer } from 'http';
@@ -16,9 +17,11 @@ import { waitersRouter } from './routes/waiters.js';
 import { publicRouter } from './routes/public.js';
 import { ordersRouter } from './routes/orders.js';
 import { financeRouter } from './routes/finance.js';
+import { cashRouter,initCash } from './routes/cash.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 initDb();
+initCash(db);
 
 const app = express();
 const httpServer = createServer(app);
@@ -37,9 +40,17 @@ app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
 const cardapioImgDir = process.env.CARDAPIO_IMG_DIR && String(process.env.CARDAPIO_IMG_DIR).trim()
   ? String(process.env.CARDAPIO_IMG_DIR).trim()
-  : join(__dirname, '..', '..', 'fotocardapio');
+  : join(__dirname, '..', 'fotocardapio');
 app.use('/api/public/cardapio-img', express.static(cardapioImgDir));
 
+app.use('/api/auth',authRouter);
+app.use('/api/public',rateLimit(120),publicRouter);
+app.get('/api/health',(_,res)=>res.json({ok:true}));
+app.use('/api',authorize);
+io.use((socket,next)=>{
+ const session=sessionFor(socket.handshake.auth?.token);if(!session)return next(new Error('Acesso não autorizado'));
+ socket.data.user=session;next();
+});
 // Rota de merge na app (antes do router) para não retornar 404
 app.post('/api/comandas/merge', (req, res) => {
   const db = app.get('db');
@@ -59,15 +70,15 @@ app.use('/api/menu', menuRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/print', printRouter);
 app.use('/api/waiters', waitersRouter);
-app.use('/api/public', publicRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/finance', financeRouter);
+app.use('/api/cash', cashRouter);
 
-app.get('/api/health', (_, res) => res.json({ ok: true }));
 
 io.on('connection', (socket) => {
+  socket.join(socket.data.user.isCaixa?'caixa':'garcom');
   socket.on('join-room', (room) => {
-    socket.join(room);
+    if(socket.data.user.isCaixa && ['kitchen','grill','bar'].includes(room)) socket.join(room);
   });
   socket.on('leave-room', (room) => {
     socket.leave(room);
@@ -97,7 +108,8 @@ function logIpv4Lan(port) {
 }
 
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`PDV Bosque API em todas as interfaces — porta ${PORT}`);
-  logIpv4Lan(PORT);
+httpServer.listen(PORT, process.env.PDV_HOST || '0.0.0.0', () => {
+  announceAccess();
+  console.log(`PDV Bosque API em ${process.env.PDV_HOST || '0.0.0.0'} — porta ${PORT}`);
+  if (!process.env.PDV_HOST || process.env.PDV_HOST === '0.0.0.0') logIpv4Lan(PORT);
 });

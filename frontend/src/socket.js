@@ -7,7 +7,8 @@ let socket = null;
 export function getSocket() {
   if (!socket) {
     const url = getApiBase();
-    socket = io(url || undefined, { path: '/socket.io', transports: ['websocket', 'polling'] });
+    let token;try{token=JSON.parse(localStorage.getItem('pdv_bosque_waiter'))?.token}catch{token=undefined}
+    socket = io(url || undefined, { path: '/socket.io', transports: ['websocket', 'polling'],auth:{token},autoConnect:!!token });
   }
   return socket;
 }
@@ -19,7 +20,7 @@ export function getSocket() {
 export function useSocket(on) {
   const s = getSocket();
   const ref = useRef(on);
-  ref.current = on;
+  useEffect(()=>{ref.current=on},[on]);
 
   useEffect(() => {
     const wrap =

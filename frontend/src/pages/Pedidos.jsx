@@ -5,7 +5,6 @@ import {
   lancheComOpcionaisAdicionais,
   itemAceitaCebolaCaramelizada,
   itemAceitaHamburguerExtra,
-  unitPrecoComAddons,
   textoResumoAddonsPedido,
   PRECO_CEbola_CARAMELIZADA,
   PRECO_HAMBURGUER_EXTRA
@@ -25,7 +24,7 @@ export default function Pedidos() {
   const [espetinhos, setEspetinhos] = useState([])
   const [pedidos, setPedidos] = useState([])
   const [view, setView] = useState('categories') // categories | items | revisao | comanda
-  const [categoryId, setCategoryId] = useState(null)
+  const [, setCategoryId] = useState(null)
   const [currentCategory, setCurrentCategory] = useState(null)
   const [modal, setModal] = useState(null) // { item, quantity, step: 'meat'|'prato_feito'|'caipirinha'|'dose'|'confirm' }
   const [errorMessage, setErrorMessage] = useState('')
@@ -149,10 +148,6 @@ export default function Pedidos() {
     }
   }
 
-  const removeFromRascunho = (index) => {
-    setRascunho((prev) => prev.filter((_, i) => i !== index))
-    setEditRascunhoIndex(null)
-  }
 
   const sendPedido = async (opts) => {
     const { item, quantity, meat_point, caipirinha_base, caipirinha_picole, dose_accompaniment, prato_feito_espetinho_id, observations, extra_caramelized_onion, extra_hamburger } = opts
@@ -214,17 +209,6 @@ export default function Pedidos() {
     else setView('revisao')
   }
 
-  const totalPedidos = pedidos.reduce((s, p) => s + p.quantity * p.unit_price, 0)
-  const totalRascunho = rascunho.reduce(
-    (s, r) =>
-      s +
-      r.quantity *
-        unitPrecoComAddons(r.item?.price, r.item, {
-          extra_caramelized_onion: r.extra_caramelized_onion,
-          extra_hamburger: r.extra_hamburger
-        }),
-    0
-  )
   const totalItens = pedidos.reduce((s, p) => s + (p.quantity || 1), 0) + rascunho.reduce((s, r) => s + (r.quantity || 1), 0)
 
   /** Coluna esquerda: bebidas/bar; coluna direita: comidas. */
@@ -663,7 +647,7 @@ export default function Pedidos() {
               className="flex flex-col rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-amber-400 hover:bg-slate-50"
             >
               <span className="font-medium text-slate-800">{item.name}</span>
-              <span className="text-amber-600">R$ {Number(item.price).toFixed(2)}</span>
+              <span className="text-amber-600">R$ {Number(item.price).toFixed(2).replace('.', ',')}</span>
             </button>
           ))}
         </div>

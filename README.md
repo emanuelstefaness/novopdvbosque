@@ -1,5 +1,19 @@
 # PDV Bosque da Carne
 
+## Atualização da interface e correções — setembro de 2026
+
+A interface foi reorganizada com navegação lateral, telas de atendimento, caixa em duas áreas e central de pedidos online por etapa. Cardápio, produção, relatórios, financeiro e telas públicas usam o mesmo padrão visual.
+
+- Couvert só é cobrado depois de **Lançar couvert**; informar pessoas não adiciona cobrança. Serviço de 10% incide apenas no consumo, excluindo couvert.
+- Pagamento parcial grava recebimento e preserva os itens na produção. Reabrir um número inicia outro atendimento sem apagar vendas anteriores.
+- Relatórios e financeiro consultam recebimentos permanentes, incluindo pedidos online entregues. Há filtro por dia/intervalo e exportação CSV das vendas.
+- Baixa de uma unidade na cozinha reduz somente o saldo de produção, preservando a quantidade vendida.
+- Caixa e produção exigem senha validada no backend. Configure `PDV_CAIXA_PASSWORD` em `backend/.env`; se estiver vazio, use a senha temporária mostrada no terminal. Sessões duram 12 horas e são encerradas ao reiniciar o servidor. O acesso simplificado de garçom foi mantido, com permissões limitadas no servidor.
+
+**Ao atualizar uma instalação existente:** pare o sistema, faça uma cópia do banco SQLite e mantenha seu `.env`. Atualize os arquivos de código; não rode o seed sobre a instalação em uso. As novas tabelas são criadas automaticamente na inicialização. Registros fechados ainda presentes são migrados para o histórico; vendas que a versão antiga já apagou não podem ser reconstruídas automaticamente. Valide os totais históricos com seu backup antes de usar em operação.
+
+Requer Node.js 22. Para verificar: `cd backend && npm test`; no frontend, `npm run build`. Integrações externas de PIX e impressão física precisam ser verificadas no equipamento/configuração do restaurante.
+
 Sistema completo de gerenciamento de restaurante para **garçons**, **cozinha**, **churrasqueira**, **bar** e **frente de caixa**. Funciona **localmente na rede Wi‑Fi** do restaurante, sem depender de internet.
 
 ## Tecnologias
