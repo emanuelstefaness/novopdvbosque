@@ -10,3 +10,4 @@ backend/pdv_bosque.db-shm
 .env
 *.log
 ULTIMO_LINK_TUNEL.txt
+.worktrees/
