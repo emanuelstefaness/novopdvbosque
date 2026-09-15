@@ -9,6 +9,7 @@
 - `prototype-detail.png`
 - `qa-home-comparison.png`
 - `qa-detail-comparison.png`
+- `delivery-full-menu.png`
 - Route: `http://127.0.0.1:5175/demo-espetinhos`
 
 **Viewport and normalization**
@@ -46,6 +47,8 @@
 6. User review P2: “Com fome?” used a different typographic voice from the section heading. Fix: applied the same Fraunces display face, weight, color, and tight tracking used by “Espetinhos”.
 7. Post-review evidence: refreshed home and detail captures confirm clean copy separation, deliberate card breakout, larger detail crop, and matching display typography.
 8. User review P2: card images extended too far beyond their bounds. Fix: reduced card image width and height and limited the breakout to 52 px, preserving the floating effect without invading the category heading.
+9. Full-delivery rollout: generated 32 additional product-specific transparent assets, bringing all 35 public delivery items into one photographic system. Verified every new file is RGBA with real transparent pixels, every category is selectable from the half-moon, and all item cards retain their product-specific name, price, modal, additions, quantity, and cart behavior.
+10. Final browser evidence: `delivery-full-menu.png` shows the continuous pale category/grid background, white cards above it, nine real category controls, and standardized product imagery without missing-image fallbacks.
 
 **Primary interactions tested**
 - Category filtering.
