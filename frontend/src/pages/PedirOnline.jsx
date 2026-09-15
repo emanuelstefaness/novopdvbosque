@@ -818,10 +818,11 @@ export default function PedirOnline() {
             <Icon name="orders" size={20} />{totalItems > 0 && <b>{totalItems}</b>}
           </button>
         </header>
-        <label className="delivery-search">
-          <Icon name="search" size={16} />
-          <input value={menuSearch} onChange={(event) => setMenuSearch(event.target.value)} placeholder="Buscar no cardápio" />
-        </label>
+        <div className="delivery-search" role="search">
+          <span><Icon name="search" size={17} /></span>
+          <input aria-label="Buscar no cardápio" value={menuSearch} onChange={(event) => setMenuSearch(event.target.value)} placeholder="O que você quer pedir?" />
+          {menuSearch && <button type="button" onClick={() => setMenuSearch('')} aria-label="Limpar busca"><Icon name="close" size={15} /></button>}
+        </div>
         {entregaGratis && (
           <p className="delivery-free">Entrega grátis hoje</p>
         )}
@@ -846,10 +847,15 @@ export default function PedirOnline() {
           {pedidoSalvoLocal?.telefone && (
             <Link
               to="/acompanhar"
-              className="mb-4 flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 hover:bg-amber-100"
+              className="delivery-last-order"
             >
-              <span> Acompanhar meu último pedido</span>
-              <span className="text-amber-700">Ver →</span>
+              <span className="delivery-last-order-icon"><Icon name="receipt" size={20} /></span>
+              <span className="delivery-last-order-copy">
+                <small>Pedido #{pedidoSalvoLocal.id}</small>
+                <strong>Acompanhar meu último pedido</strong>
+                <span>Veja o preparo e a previsão de entrega</span>
+              </span>
+              <span className="delivery-last-order-action">Ver <Icon name="arrow" size={15} /></span>
             </Link>
           )}
           {error && (
