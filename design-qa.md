@@ -50,7 +50,7 @@
 9. Authentic-photo correction: removed the 32 invented product substitutes. The delivery catalog now uses eleven transparent cutouts derived from every original Bosque photograph available in the repository, preserving the actual food, ingredients, color, and presentation.
 10. Products without an authentic source photograph use the neutral fallback state until a real photo is supplied. `delivery-full-menu.png` records the corrected category and card treatment.
 11. Category navigation was rebuilt as a true symmetrical half-moon: `Todos` is centered at the apex and four real categories descend on each side. All nine category filters were exercised in the browser.
-12. The five authentic skewer cutouts were normalized geometrically to the same -35 degree axis, canvas occupancy, center, and shadow without changing their food pixels. Sandwich and plated-dish cards use separate consistent scale rules.
+12. The five authentic skewer cutouts were normalized geometrically to the same -58 degree axis, canvas occupancy, center, and shadow without changing their food pixels. Sandwich and plated-dish cards use separate consistent scale rules.
 13. Product detail media now occupies its own hero region above the title, description, price, additions, and controls. Browser checks confirmed that large food photography no longer covers copy or interactive fields.
 14. The Churraspão de coração now uses the distinct open-faced heart filling visible in its original Bosque photograph, instead of repeating the closed Churraspão image from the background of that source photo.
 
