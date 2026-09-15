@@ -53,6 +53,8 @@
 12. The five authentic skewer cutouts were normalized geometrically to the same -58 degree axis, canvas occupancy, center, and shadow without changing their food pixels. Sandwich and plated-dish cards use separate consistent scale rules.
 13. Product detail restores the agreed split hero: title, description, and price occupy the left half while enlarged food photography occupies the right half; additions and controls begin below both columns. Browser checks with a sandwich and a skewer confirmed that photography no longer covers copy or fields.
 14. The Churraspão de coração now uses the distinct open-faced heart filling visible in its original Bosque photograph, instead of repeating the closed Churraspão image from the background of that source photo.
+15. Category photography was removed from the half-moon. Nine equal 48 px controls now use dedicated line icons and positions calculated at equal angular intervals; `Todos` stays at the exact apex. Endpoint labels were verified clear of the catalog and neighboring controls.
+16. Items without a source photo no longer request guessed image filenames. They render immediately with the matching category icon and an explicit `Foto em breve` state.
 
 **Primary interactions tested**
 - Category filtering.

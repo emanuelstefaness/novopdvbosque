@@ -91,6 +91,24 @@ const normalize = (v) => String(v || '').toLowerCase().normalize('NFD').replace(
 const bySort = (a, b) => (a.sort_order || 0) - (b.sort_order || 0)
 
 const slugOrder = ['espetinhos', 'lanches', 'pratos', 'porcoes']
+const CATEGORY_ICON_BY_SLUG = {
+  espetinhos: 'skewer',
+  lanches: 'burger',
+  pratos: 'plate',
+  porcoes: 'bowl',
+  acompanhamentos: 'leaf',
+  sobremesas: 'dessert',
+  bebidas: 'bottle',
+  caipirinhas: 'cocktail',
+}
+
+function categoryArcStyle(index, total) {
+  const angle = Math.PI - (Math.PI * index) / Math.max(1, total - 1)
+  return {
+    '--arc-x': `${50 + 41 * Math.cos(angle)}%`,
+    '--arc-y': `${128 - 110 * Math.sin(angle)}px`,
+  }
+}
 
 function isPratoFeitoItem(item) {
   if (!item) return false
@@ -123,9 +141,7 @@ function getItemImageUrl(apiBase, itemName) {
 /** Nome do arquivo em `public/fotocardapio/` (deploy Vercel = mesmo site do Pedir). */
 function fotocardapioFileForItemName(itemName) {
   const n = normalize(itemName)
-  if (IMAGE_FILE_BY_ITEM_NAME[n]) return IMAGE_FILE_BY_ITEM_NAME[n]
-  const slug = n.replace(/\s+/g, '-').replace(/[^a-z0-9-]+/g, '')
-  return slug ? `${slug}.jpg` : null
+  return IMAGE_FILE_BY_ITEM_NAME[n] || null
 }
 
 /** URL servida pelo Vite/Vercel a partir da pasta `frontend/public/fotocardapio/`. */
@@ -153,7 +169,7 @@ function productVisualKind(itemName) {
   return 'skewer'
 }
 
-function ProductCard({ item, badges = [], onOpen }) {
+function ProductCard({ item, badges = [], categoryIcon = 'book', onOpen }) {
   const [failedImages,setFailedImages]=useState([])
   const imgSrc=[item.image,item.imageFallback].find(src=>src&&!failedImages.includes(src))||null
   const onImgError=()=>setFailedImages(prev=>[...prev,imgSrc])
@@ -165,7 +181,7 @@ function ProductCard({ item, badges = [], onOpen }) {
           {imgSrc ? (
             <img src={imgSrc} alt="" onError={onImgError} />
           ) : (
-            <div className="delivery-image-fallback">{item.name?.charAt(0) || ''}</div>
+            <div className="delivery-image-fallback"><Icon name={categoryIcon} size={30} /><span>Foto em breve</span></div>
           )}
         </div>
         <div className="delivery-product-copy">
@@ -738,12 +754,12 @@ export default function PedirOnline() {
           <nav className="delivery-category-arc" aria-label="Categorias do cardápio">
             <div className="delivery-category-orbit">
               {arcCategories.map((c, index) => {
-                if (!c) return <button type="button" key="all" className={`category-all ${activeCatId === 'all' ? 'is-active' : ''}`} onClick={() => setActiveCatId('all')}>
+                const arcStyle = categoryArcStyle(index, arcCategories.length)
+                if (!c) return <button type="button" key="all" style={arcStyle} className={`category-all ${activeCatId === 'all' ? 'is-active' : ''}`} onClick={() => setActiveCatId('all')}>
                   <span><Icon name="grid" size={20} /></span><b>Todos</b>
                 </button>
-                const representative = (itemsByCategory.get(c.id) || []).find((item) => item.transparent)
-                return <button type="button" key={c.id} className={activeCatId === c.id ? 'is-active' : ''} style={{ '--arc-slot': index }} onClick={() => setActiveCatId(c.id)}>
-                  <span><Icon name="book" size={19} />{representative && <img src={representative.image} alt="" onError={(event) => event.currentTarget.remove()} />}</span>
+                return <button type="button" key={c.id} className={activeCatId === c.id ? 'is-active' : ''} style={arcStyle} onClick={() => setActiveCatId(c.id)}>
+                  <span><Icon name={CATEGORY_ICON_BY_SLUG[c.slug] || 'book'} size={20} /></span>
                   <b>{c.name}</b>
                 </button>
               })}
@@ -778,10 +794,11 @@ export default function PedirOnline() {
             <div className="delivery-products-grid">
               {visibleMenuItems.map((item) => {
                 const n = normalize(item.name)
+                const category = orderedCategories.find((c) => c.id === item.category_id)
                 const badges = []
                 if (n.includes('gado') && n.includes('bacon')) badges.push('Mais pedido')
                 if (n.includes('churraspao') || n.includes('prato feito')) badges.push('Favorito')
-                return <ProductCard key={item.id} item={item} badges={badges} onOpen={setModalProduct} />
+                return <ProductCard key={item.id} item={item} badges={badges} categoryIcon={CATEGORY_ICON_BY_SLUG[category?.slug] || 'book'} onOpen={setModalProduct} />
               })}
             </div>
           </section>
