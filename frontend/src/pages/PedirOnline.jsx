@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { getApiBase } from '../devApiBase'
 import PedidoOnlineAcompanhamento from '../components/PedidoOnlineAcompanhamento'
@@ -186,7 +187,7 @@ function productVisualKind(itemName) {
   return 'skewer'
 }
 
-function ProductCard({ item, badges = [], categoryIcon = 'book', onOpen }) {
+function ProductCard({ item, badges = [], categoryIcon = 'book', onOpen, imageTransitionActive = false }) {
   const [failedImages,setFailedImages]=useState([])
   const imgSrc=[item.image,item.imageFallback].find(src=>src&&!failedImages.includes(src))||null
   const onImgError=()=>setFailedImages(prev=>[...prev,imgSrc])
@@ -196,7 +197,12 @@ function ProductCard({ item, badges = [], categoryIcon = 'book', onOpen }) {
       <button type="button" onClick={() => onOpen(item)} className="delivery-product-hit" aria-label={`Abrir ${item.name}, ${formatPrice(item.price)}`}>
         <div className="delivery-product-image">
           {imgSrc ? (
-            <img src={imgSrc} alt="" onError={onImgError} />
+            <img
+              src={imgSrc}
+              alt=""
+              onError={onImgError}
+              style={imageTransitionActive ? { viewTransitionName: 'delivery-product-image' } : undefined}
+            />
           ) : (
             <div className="delivery-image-fallback"><Icon name={categoryIcon} size={30} /><span>Foto em breve</span></div>
           )}
@@ -267,6 +273,7 @@ export default function PedirOnline() {
   const [pedidoSalvoLocal, setPedidoSalvoLocal] = useState(() => lerPedidoLocal())
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [modalProduct, setModalProduct] = useState(null)
+  const [transitionProductId, setTransitionProductId] = useState(null)
   const [modalQty, setModalQty] = useState(1)
   const [modalObs, setModalObs] = useState('')
   const [modalPfEspetinhoId, setModalPfEspetinhoId] = useState('')
@@ -511,6 +518,50 @@ export default function PedirOnline() {
     })
   }, [modalProduct, modalProductCategorySlug, modalExtraCebola, modalExtraBurger])
 
+  const canAnimateProductTransition = () => (
+    typeof document !== 'undefined' &&
+    typeof document.startViewTransition === 'function' &&
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+
+  const resetModalFields = () => {
+    setModalQty(1)
+    setModalObs('')
+    setModalPfEspetinhoId('')
+    setModalExtraCebola(false)
+    setModalExtraBurger(false)
+  }
+
+  const openProduct = (item) => {
+    if (!canAnimateProductTransition() || !item.image) {
+      setModalProduct(item)
+      return
+    }
+    flushSync(() => setTransitionProductId(item.id))
+    const transition = document.startViewTransition(() => {
+      flushSync(() => setModalProduct(item))
+    })
+    transition.finished.finally(() => setTransitionProductId(null))
+  }
+
+  const closeProduct = () => {
+    if (!modalProduct) return
+    const productId = modalProduct.id
+    const finishClose = () => {
+      setModalProduct(null)
+      resetModalFields()
+    }
+    if (!canAnimateProductTransition() || !modalProduct.image) {
+      finishClose()
+      return
+    }
+    flushSync(() => setTransitionProductId(productId))
+    const transition = document.startViewTransition(() => {
+      flushSync(finishClose)
+    })
+    transition.finished.finally(() => setTransitionProductId(null))
+  }
+
   useEffect(() => {
     if (!modalProduct) return
     setModalQty(1)
@@ -573,10 +624,7 @@ export default function PedirOnline() {
         ? { extra_caramelized_onion: modalExtraCebola, extra_hamburger: modalExtraBurger }
         : null
     addItem(modalProduct, modalQty, composed, null, isPratoFeito ? Number(modalPfEspetinhoId) : null, extras)
-    setModalProduct(null)
-    setModalQty(1)
-    setModalObs('')
-    setModalPfEspetinhoId('')
+    closeProduct()
   }
 
   const addSuggested = (item) => {
@@ -825,7 +873,7 @@ export default function PedirOnline() {
                 const badges = []
                 if (n.includes('gado') && n.includes('bacon')) badges.push('Mais pedido')
                 if (n.includes('churraspao') || n.includes('prato feito')) badges.push('Favorito')
-                return <ProductCard key={item.id} item={item} badges={badges} categoryIcon={CATEGORY_ICON_BY_SLUG[category?.slug] || 'book'} onOpen={setModalProduct} />
+                return <ProductCard key={item.id} item={item} badges={badges} categoryIcon={CATEGORY_ICON_BY_SLUG[category?.slug] || 'book'} onOpen={openProduct} imageTransitionActive={transitionProductId === item.id && !modalProduct} />
               })}
             </div>
           </section>
@@ -1021,18 +1069,19 @@ export default function PedirOnline() {
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 sm:items-center"
           onClick={() => {
-            setModalProduct(null)
-            setModalQty(1)
-            setModalObs('')
-            setModalPfEspetinhoId('')
-            setModalExtraCebola(false)
-            setModalExtraBurger(false)
+            closeProduct()
           }}
         >
           <div className="delivery-product-modal w-full max-w-md rounded-t-3xl bg-white p-5 shadow-float sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="delivery-modal-close" aria-label="Fechar detalhes" onClick={() => setModalProduct(null)}>×</button>
+            <button type="button" className="delivery-modal-close" aria-label="Fechar detalhes" onClick={closeProduct}>×</button>
             <div className={`delivery-modal-hero ${modalProduct.transparent ? `is-transparent image-${productVisualKind(modalProduct.name)}` : ''}`}>
-              {modalProduct.image && <img src={modalProduct.image} alt={modalProduct.name} />}
+              {modalProduct.image && (
+                <img
+                  src={modalProduct.image}
+                  alt={modalProduct.name}
+                  style={transitionProductId === modalProduct.id ? { viewTransitionName: 'delivery-product-image' } : undefined}
+                />
+              )}
             </div>
             <div className="delivery-modal-summary">
               <span>Direto da brasa</span>

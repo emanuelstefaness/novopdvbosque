@@ -58,6 +58,7 @@
 17. Category priority now radiates from the center as requested: Espetinhos/Lanches, Porções/Acompanhamentos, Pratos/Sobremesas, then Bebidas/Caipirinhas. All icons were redrawn as a consistent 1.85 px line set with literal food and drink silhouettes.
 18. Seven caipirinha product images now follow the supplied real Maracujá reference: the same tall cup, fruit texture, horizontal ice pop, angle, lighting, and transparent presentation, with the hand, clip, sign, and original background removed. Card and split-detail scale rules were verified separately for the tall drink silhouette.
 19. A full-history audit of the original `vendas` repository found no source photographs for Gado com Bacon e Legumes, Kafta, Medalhão de Frango, or Medalhão de Mandioca. After receiving the product construction from the restaurant, those four were rebuilt in the existing real-photo style: beef with diced peppers/onion, handmade kafta burger with pepper/garlic, chicken medallions wrapped in bacon, and exactly five cassava cubes wrapped in bacon.
+20. Product cards and their detail heroes now share one continuous 480 ms image transition. Browser captures at 160–170 ms confirmed that one image grows from the card into the right-side hero and returns to the original card position on close, without a duplicate crossfade. Reduced-motion users receive the immediate state change.
 
 **Primary interactions tested**
 - Category filtering.

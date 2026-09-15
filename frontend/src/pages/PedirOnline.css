@@ -92,6 +92,13 @@
 .delivery-product-card.has-transparent-image.image-drink .delivery-product-image img { width:76%; height:168px; margin-top:-34px; }
 .delivery-product-card.has-transparent-image.image-patty .delivery-product-image img { width:76%; height:158px; margin-top:-29px; }
 .delivery-product-card.has-transparent-image:hover .delivery-product-image img { transform:translateY(-4px) scale(1.015); }
+::view-transition-group(delivery-product-image) { animation-duration:.48s; animation-timing-function:cubic-bezier(.2,.78,.2,1); }
+::view-transition-old(root),
+::view-transition-new(root) { animation:none; mix-blend-mode:normal; }
+::view-transition-old(root) { opacity:0; }
+::view-transition-new(root) { opacity:1; }
+::view-transition-old(delivery-product-image) { animation:none; opacity:0; }
+::view-transition-new(delivery-product-image) { animation:none; opacity:1; mix-blend-mode:normal; }
 .delivery-product-copy h3 { margin:0; color:#202722; font-size:16px; line-height:1.15; font-weight:700; }
 .delivery-product-copy > p { height:37px; margin:6px 0 0; overflow:hidden; color:#727a74; font-size:10.5px; line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 .delivery-product-copy > strong { display:block; margin-top:9px; color:var(--delivery-ember); font-size:15px; }
@@ -146,4 +153,9 @@
   .delivery-product-card.has-transparent-image .delivery-product-image img { height:150px; margin-top:-30px; }
   .delivery-modal-hero { height:300px; }
   .delivery-modal-summary { min-height:300px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  ::view-transition-group(delivery-product-image),
+  ::view-transition-old(delivery-product-image),
+  ::view-transition-new(delivery-product-image) { animation-duration:.01ms; }
 }
