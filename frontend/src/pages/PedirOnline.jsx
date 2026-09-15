@@ -180,6 +180,7 @@ function resolvePedirItemImages(itemName, apiBase) {
 function productVisualKind(itemName) {
   const name = normalize(itemName)
   if (name.includes('caipirinha')) return 'drink'
+  if (name === 'kafta') return 'patty'
   if (name.includes('churraspao') || name.includes('x-bosque') || name.includes('x bosque')) return 'sandwich'
   if (name.includes('entrevero') || name.includes('prato feito') || name.includes('salada do bosque')) return 'dish'
   return 'skewer'

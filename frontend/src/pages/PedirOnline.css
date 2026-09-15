@@ -90,6 +90,7 @@
 .delivery-product-card.has-transparent-image.image-sandwich .delivery-product-image img { width:92%; height:158px; margin-top:-30px; }
 .delivery-product-card.has-transparent-image.image-dish .delivery-product-image img { width:88%; height:158px; margin-top:-29px; }
 .delivery-product-card.has-transparent-image.image-drink .delivery-product-image img { width:76%; height:168px; margin-top:-34px; }
+.delivery-product-card.has-transparent-image.image-patty .delivery-product-image img { width:76%; height:158px; margin-top:-29px; }
 .delivery-product-card.has-transparent-image:hover .delivery-product-image img { transform:translateY(-4px) scale(1.015); }
 .delivery-product-copy h3 { margin:0; color:#202722; font-size:16px; line-height:1.15; font-weight:700; }
 .delivery-product-copy > p { height:37px; margin:6px 0 0; overflow:hidden; color:#727a74; font-size:10.5px; line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
@@ -118,6 +119,7 @@
 .delivery-modal-hero.is-transparent.image-sandwich img { transform:translateX(12%) scale(1.28); }
 .delivery-modal-hero.is-transparent.image-dish img { transform:translateX(10%) scale(1.14); }
 .delivery-modal-hero.is-transparent.image-drink img { transform:translateX(10%) scale(1.08); }
+.delivery-modal-hero.is-transparent.image-patty img { transform:translateX(10%) scale(1.14); }
 .delivery-modal-summary { position:relative; z-index:2; width:48%; min-height:315px; padding:72px 0 20px; }
 .delivery-modal-summary > span { color:var(--delivery-ember); font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
 .delivery-modal-summary h3 { margin:5px 0 0; color:#1e2521; font:700 27px/.98 "Fraunces",Georgia,serif; letter-spacing:-.035em; }
