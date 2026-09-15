@@ -114,16 +114,16 @@
   position:absolute; z-index:5; top:14px; left:14px; width:42px; height:42px; border:1px solid #dde1dc;
   border-radius:50%; background:rgba(255,255,255,.9); color:var(--delivery-forest); font-size:24px; line-height:1;
 }
-.delivery-modal-hero { position:relative; height:270px; margin:0 -20px; overflow:hidden; border-radius:24px 24px 0 0; background:#eee9df; }
+.delivery-modal-hero { position:absolute; z-index:1; top:0; right:0; width:54%; height:315px; overflow:hidden; border-radius:0 24px 0 0; background:#eee9df; }
 .delivery-modal-hero img { width:100%; height:100%; object-fit:cover; }
 .delivery-modal-hero.is-transparent { background:#fffdf8; }
 .delivery-modal-hero.is-transparent img {
   position:absolute; inset:0; width:100%; height:100%; max-width:none; object-fit:contain;
-  transform:scale(1.12); filter:drop-shadow(0 18px 15px rgba(75,46,23,.22));
+  transform:translateX(11%) scale(1.36); filter:drop-shadow(0 18px 15px rgba(75,46,23,.22));
 }
-.delivery-modal-hero.is-transparent.image-sandwich img { transform:scale(1.05); }
-.delivery-modal-hero.is-transparent.image-dish img { transform:scale(.94); }
-.delivery-modal-summary { position:relative; z-index:2; width:100%; min-height:0; padding:18px 0 4px; }
+.delivery-modal-hero.is-transparent.image-sandwich img { transform:translateX(12%) scale(1.28); }
+.delivery-modal-hero.is-transparent.image-dish img { transform:translateX(10%) scale(1.14); }
+.delivery-modal-summary { position:relative; z-index:2; width:48%; min-height:315px; padding:72px 0 20px; }
 .delivery-modal-summary > span { color:var(--delivery-ember); font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
 .delivery-modal-summary h3 { margin:5px 0 0; color:#1e2521; font:700 27px/.98 "Fraunces",Georgia,serif; letter-spacing:-.035em; }
 .delivery-modal-summary p { margin:8px 0 0; color:#777e78; font-size:11px; line-height:1.45; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
@@ -149,5 +149,6 @@
   .delivery-product-image { height:150px; }
   .delivery-product-card.has-transparent-image .delivery-product-image { height:128px; }
   .delivery-product-card.has-transparent-image .delivery-product-image img { height:150px; margin-top:-30px; }
-  .delivery-modal-hero { height:245px; }
+  .delivery-modal-hero { height:300px; }
+  .delivery-modal-summary { min-height:300px; }
 }

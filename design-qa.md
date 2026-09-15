@@ -51,7 +51,7 @@
 10. Products without an authentic source photograph use the neutral fallback state until a real photo is supplied. `delivery-full-menu.png` records the corrected category and card treatment.
 11. Category navigation was rebuilt as a true symmetrical half-moon: `Todos` is centered at the apex and four real categories descend on each side. All nine category filters were exercised in the browser.
 12. The five authentic skewer cutouts were normalized geometrically to the same -58 degree axis, canvas occupancy, center, and shadow without changing their food pixels. Sandwich and plated-dish cards use separate consistent scale rules.
-13. Product detail media now occupies its own hero region above the title, description, price, additions, and controls. Browser checks confirmed that large food photography no longer covers copy or interactive fields.
+13. Product detail restores the agreed split hero: title, description, and price occupy the left half while enlarged food photography occupies the right half; additions and controls begin below both columns. Browser checks with a sandwich and a skewer confirmed that photography no longer covers copy or fields.
 14. The Churraspão de coração now uses the distinct open-faced heart filling visible in its original Bosque photograph, instead of repeating the closed Churraspão image from the background of that source photo.
 
 **Primary interactions tested**
