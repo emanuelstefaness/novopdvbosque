@@ -39,6 +39,7 @@ const REAL_CUTOUT_IMAGE_BY_ITEM_NAME = {
   'medalhao suino': '/menu-real-cutouts/medalhao-suino.png',
   'pao de alho': '/menu-real-cutouts/pao-de-alho.png',
   'queijo coalho': '/menu-real-cutouts/queijo-coalho.png',
+  'entrevero': '/menu-real-cutouts/entrevero.png',
   'churraspao': '/menu-real-cutouts/churraspao.png',
   'churraspao de coracao': '/menu-real-cutouts/churraspao-de-coracao.png',
   'prato feito do bosque': '/menu-real-cutouts/prato-feito-do-bosque.png',

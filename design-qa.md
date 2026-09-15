@@ -47,7 +47,7 @@
 6. User review P2: “Com fome?” used a different typographic voice from the section heading. Fix: applied the same Fraunces display face, weight, color, and tight tracking used by “Espetinhos”.
 7. Post-review evidence: refreshed home and detail captures confirm clean copy separation, deliberate card breakout, larger detail crop, and matching display typography.
 8. User review P2: card images extended too far beyond their bounds. Fix: reduced card image width and height and limited the breakout to 52 px, preserving the floating effect without invading the category heading.
-9. Authentic-photo correction: removed the 32 invented product substitutes. The delivery catalog now uses ten transparent cutouts derived only from the Bosque's original photographs, preserving the actual food, ingredients, color, and presentation.
+9. Authentic-photo correction: removed the 32 invented product substitutes. The delivery catalog now uses eleven transparent cutouts derived from every original Bosque photograph available in the repository, preserving the actual food, ingredients, color, and presentation.
 10. Products without an authentic source photograph use the neutral fallback state until a real photo is supplied. `delivery-full-menu.png` records the corrected category and card treatment.
 
 **Primary interactions tested**
