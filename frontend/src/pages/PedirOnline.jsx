@@ -35,8 +35,12 @@ const IMAGE_FILE_BY_ITEM_NAME = {
 }
 const REAL_CUTOUT_IMAGE_BY_ITEM_NAME = {
   'gado com bacon': '/menu-real-cutouts/gado-com-bacon.png',
+  'gado com bacon e legumes': '/menu-real-cutouts/gado-com-bacon-e-legumes.png',
+  'kafta': '/menu-real-cutouts/kafta.png',
   'coracao de frango': '/menu-real-cutouts/coracao-de-frango.png',
   'medalhao suino': '/menu-real-cutouts/medalhao-suino.png',
+  'medalhao de frango': '/menu-real-cutouts/medalhao-de-frango.png',
+  'medalhao de mandioca': '/menu-real-cutouts/medalhao-de-mandioca.png',
   'pao de alho': '/menu-real-cutouts/pao-de-alho.png',
   'queijo coalho': '/menu-real-cutouts/queijo-coalho.png',
   'entrevero': '/menu-real-cutouts/entrevero.png',
@@ -79,6 +83,8 @@ const PEDIR_MARKETING_DESC = {
     'Carne bovina suculenta com pedaços de bacon — defumado, intenso e impossível de resistir.',
   'gado com bacon e legumes':
     'Carne bovina macia com legumes grelhados — leve, saboroso e no ponto certo.',
+  kafta:
+    'Hambúrguer artesanal de kafta com pequenos cubos de pimentão e alho, dourado diretamente na brasa.',
   'medalhao de frango':
     'Frango macio envolto em bacon, dourado na brasa — suculento e cheio de sabor.',
   'medalhao suino':
