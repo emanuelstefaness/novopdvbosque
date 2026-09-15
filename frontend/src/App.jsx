@@ -20,6 +20,7 @@ const PedidosOnlineInterno = lazy(() => import("./pages/PedidosOnlineInterno"));
 const PedirOnlineAcompanhar = lazy(
   () => import("./pages/PedirOnlineAcompanhar"),
 );
+const EspetinhosDemo = lazy(() => import("./demoEspetinhos/EspetinhosDemo"));
 
 import AppShell from "./components/AppShell";
 function RequerLogin({ children }) {
@@ -39,7 +40,7 @@ function SemAcessoGarcom({ children }) {
 function App() {
   const { pathname } = useLocation();
   const { waiter } = useWaiter();
-  const publicPage = pathname === "/pedir" || pathname === "/acompanhar";
+  const publicPage = pathname === "/pedir" || pathname === "/acompanhar" || pathname === "/demo-espetinhos";
   const tv = pathname.startsWith("/tv");
   const content = (
     <Suspense
@@ -54,6 +55,7 @@ function App() {
         <Route path="/" element={waiter && !waiter.isCaixa ? <Navigate to="/garcons" replace /> : <Home />} />
         <Route path="/pedir" element={<PedirOnline />} />
         <Route path="/acompanhar" element={<PedirOnlineAcompanhar />} />
+        <Route path="/demo-espetinhos" element={<EspetinhosDemo />} />
         <Route
           path="/garcons"
           element={

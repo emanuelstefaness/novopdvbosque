@@ -1,0 +1,635 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap");
+
+.skewer-demo {
+  --forest: #153f35;
+  --forest-2: #245f50;
+  --ember: #b8662d;
+  --coal: #202923;
+  --cream: #f7f3e8;
+  --paper: #fffdf8;
+  --muted: #6f786f;
+  min-height: 100dvh;
+  background: #e6e2d7;
+  color: var(--coal);
+  font-family: "DM Sans", sans-serif;
+  padding: 20px;
+}
+.skewer-demo * {
+  box-sizing: border-box;
+}
+.skewer-demo button {
+  font: inherit;
+}
+.skewer-demo button:focus-visible {
+  outline: 3px solid #e8a24d;
+  outline-offset: 3px;
+}
+.skewer-demo-shell {
+  position: relative;
+  width: min(100%, 480px);
+  min-height: calc(100dvh - 40px);
+  margin: auto;
+  background: var(--paper);
+  overflow: hidden;
+  border-radius: 32px;
+  box-shadow: 0 25px 70px #24382f24;
+}
+.skewer-home-header {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 24px 8px;
+}
+.skewer-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.skewer-brand img {
+  width: 62px;
+  height: 48px;
+  object-fit: contain;
+}
+.skewer-brand span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.skewer-cart {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border: 1px solid #dfe5df;
+  border-radius: 50%;
+  background: white;
+  color: var(--forest);
+  font-size: 25px;
+  display: grid;
+  place-items: center;
+}
+.skewer-cart b {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 20px;
+  background: var(--ember);
+  color: #fff;
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+}
+.skewer-cart.has-items {
+  animation: cartBump 0.35s ease;
+}
+.skewer-intro {
+  padding: 13px 27px 0;
+}
+.skewer-intro p,
+.skewer-detail-copy > p:first-child {
+  margin: 0 0 4px;
+  color: var(--ember);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 10px;
+}
+.skewer-intro h1 {
+  font:
+    600 clamp(35px, 9vw, 46px)/0.98 "Fraunces",
+    Georgia,
+    serif;
+  letter-spacing: -0.045em;
+  margin: 0;
+}
+.skewer-intro h1 em {
+  color: var(--forest);
+  font-style: normal;
+}
+.skewer-category-arc {
+  height: 154px;
+  position: relative;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.skewer-category-moon {
+  position: absolute;
+  left: 50%;
+  top: 42px;
+  transform: translateX(-50%);
+  width: 590px;
+  height: 250px;
+  border-radius: 50% 50% 0 0;
+  background: linear-gradient(180deg, #edf0e9 0%, #f6f4ec 70%);
+  border: 1px solid #e1e5dc;
+  box-shadow: inset 0 18px 30px #fff9;
+}
+.skewer-category {
+  position: absolute;
+  left: var(--arc-x);
+  top: var(--arc-y);
+  z-index: 2;
+  width: 68px;
+  min-height: 74px;
+  border: 0;
+  background: transparent;
+  color: #777f78;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.28s ease,
+    color 0.28s ease;
+}
+.skewer-category:hover {
+  transform: translateY(-3px);
+}
+.skewer-category-icon {
+  width: 47px;
+  height: 47px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #dce2da;
+  box-shadow: 0 7px 18px #233b3020;
+  display: grid;
+  place-items: center;
+  color: #9a7043;
+  font-size: 16px;
+  transition: 0.28s;
+}
+.skewer-category[aria-current="true"] {
+  color: var(--forest);
+  transform: translateY(-7px);
+}
+.skewer-category[aria-current="true"] .skewer-category-icon {
+  background: var(--forest);
+  color: #efb667;
+  border-color: var(--forest);
+  box-shadow: 0 10px 24px #173f3840;
+}
+.skewer-showcase {
+  position: relative;
+  z-index: 3;
+  margin-top: -19px;
+  padding: 0 20px 28px;
+}
+.skewer-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 5px 9px;
+}
+.skewer-section-heading span {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.skewer-section-heading h2 {
+  font:
+    700 25px "Fraunces",
+    Georgia,
+    serif;
+  margin: 0;
+  color: var(--forest);
+}
+.skewer-section-heading small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.skewer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.skewer-product {
+  position: relative;
+  min-height: 260px;
+  padding: 0 13px 14px;
+  border: 1px solid #e6e5dd;
+  border-radius: 23px;
+  background: linear-gradient(145deg, #fff, #f8f5ec);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  animation: cardEnter 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--card-delay);
+  box-shadow: 0 8px 20px #24382f0b;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.skewer-product:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 14px 28px #24382f17;
+}
+.skewer-image-space {
+  height: 137px;
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+.skewer-image-space i {
+  position: absolute;
+  width: 90px;
+  height: 21px;
+  bottom: 13px;
+  background: #47270f24;
+  filter: blur(9px);
+  border-radius: 50%;
+}
+.skewer-product img {
+  position: relative;
+  z-index: 1;
+  width: 160%;
+  max-width: none;
+  height: 165px;
+  object-fit: contain;
+  transform: rotate(-7deg);
+  filter: drop-shadow(0 13px 11px #4b2e172c);
+}
+.skewer-product-copy {
+  display: block;
+  position: relative;
+  z-index: 2;
+}
+.skewer-product-copy strong {
+  display: block;
+  font:
+    600 17px/1.05 "Fraunces",
+    Georgia,
+    serif;
+  color: var(--coal);
+}
+.skewer-product-copy small {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  height: 31px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.skewer-product-copy b {
+  display: block;
+  color: var(--ember);
+  font-size: 14px;
+  margin-top: 8px;
+}
+.skewer-plus {
+  position: absolute;
+  right: 12px;
+  bottom: 11px;
+  width: 29px;
+  height: 29px;
+  border-radius: 50%;
+  background: var(--forest);
+  color: white;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+.skewer-demo-label {
+  font-size: 9px;
+  text-align: center;
+  color: #8a918a;
+  letter-spacing: 0.04em;
+  margin: 3px 0 18px;
+}
+.skewer-detail {
+  min-height: calc(100dvh - 40px);
+  padding-bottom: 105px;
+  background: linear-gradient(180deg, #f7f3e8 0 47%, #fffdf8 47%);
+}
+.skewer-detail-header {
+  height: 72px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  position: relative;
+  z-index: 4;
+}
+.skewer-detail-header img {
+  width: 58px;
+  height: 46px;
+  object-fit: contain;
+}
+.skewer-detail-header button {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #dddcd4;
+  background: #fff9;
+  border-radius: 50%;
+  font-size: 21px;
+  color: var(--forest);
+  cursor: pointer;
+}
+.skewer-detail-visual {
+  height: 315px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.skewer-detail-visual > span {
+  position: absolute;
+  left: 26px;
+  top: 12px;
+  color: var(--ember);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+.skewer-detail-visual > small {
+  position: absolute;
+  right: 21px;
+  bottom: 41px;
+  color: #9ca49d;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-align: right;
+}
+.skewer-glow {
+  position: absolute;
+  width: 245px;
+  height: 245px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    #e6ad6655 0,
+    #e9d8ae35 45%,
+    transparent 70%
+  );
+}
+.skewer-detail-visual img {
+  position: relative;
+  z-index: 2;
+  width: 410px;
+  height: 350px;
+  max-width: none;
+  object-fit: contain;
+  transform: rotate(-4deg);
+  filter: drop-shadow(0 20px 16px #54301935);
+}
+.skewer-detail-copy {
+  background: var(--paper);
+  border-radius: 32px 32px 0 0;
+  padding: 27px 27px 12px;
+  box-shadow: 0 -13px 35px #4f46370c;
+}
+.skewer-detail-copy h1 {
+  font:
+    700 34px/1 "Fraunces",
+    Georgia,
+    serif;
+  letter-spacing: -0.035em;
+  color: var(--forest);
+  margin: 0;
+}
+.skewer-detail-price {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 12px;
+}
+.skewer-detail-price strong {
+  color: var(--ember);
+  font-size: 22px;
+}
+.skewer-detail-price span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.skewer-description {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--muted);
+  margin: 14px 0 17px;
+}
+.skewer-point {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.skewer-point legend {
+  font-weight: 700;
+  font-size: 12px;
+  margin-bottom: 9px;
+}
+.skewer-point > div {
+  display: flex;
+  gap: 7px;
+}
+.skewer-point button {
+  min-height: 44px;
+  flex: 1;
+  border: 1px solid #dfe1da;
+  background: #fff;
+  border-radius: 12px;
+  font-size: 10px;
+  color: #69726a;
+  cursor: pointer;
+}
+.skewer-point button[aria-pressed="true"] {
+  border-color: var(--ember);
+  background: #fff4e8;
+  color: #8c481e;
+  font-weight: 700;
+}
+.skewer-order-bar {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  bottom: 25px;
+  display: flex;
+  gap: 10px;
+  padding: 12px 20px;
+  background: linear-gradient(0deg, #fffdf8 75%, transparent);
+}
+.skewer-quantity {
+  height: 56px;
+  border: 1px solid #dfe1da;
+  background: #fff;
+  border-radius: 17px;
+  display: flex;
+  align-items: center;
+}
+.skewer-quantity button {
+  width: 42px;
+  height: 54px;
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  color: var(--forest);
+  cursor: pointer;
+}
+.skewer-quantity output {
+  min-width: 20px;
+  text-align: center;
+  font-weight: 700;
+}
+.skewer-add {
+  height: 56px;
+  flex: 1;
+  border: 0;
+  border-radius: 17px;
+  background: var(--forest);
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 17px;
+  cursor: pointer;
+  box-shadow: 0 11px 24px #153f3535;
+  transition: 0.25s;
+}
+.skewer-add.is-added {
+  background: #2f7b5f;
+  animation: addPulse 0.4s ease;
+}
+.skewer-add span {
+  font-weight: 600;
+}
+.skewer-add strong {
+  font-size: 13px;
+}
+.skewer-reveal {
+  animation: detailReveal 0.38s ease both;
+}
+.skewer-reveal.step-1 {
+  animation-delay: 60ms;
+}
+.skewer-reveal.step-2 {
+  animation-delay: 110ms;
+}
+.skewer-reveal.step-3 {
+  animation-delay: 160ms;
+}
+.skewer-reveal.step-4 {
+  animation-delay: 210ms;
+}
+.skewer-reveal.step-5 {
+  animation-delay: 260ms;
+}
+.skewer-reveal.step-6 {
+  animation-delay: 310ms;
+}
+::view-transition-group(skewer-gado-bacon),
+::view-transition-group(skewer-coracao-frango),
+::view-transition-group(skewer-queijo-coalho) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.2, 0.82, 0.2, 1);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.28s;
+}
+@keyframes cardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes detailReveal {
+  from {
+    opacity: 0;
+    transform: translateY(13px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes cartBump {
+  50% {
+    transform: scale(1.12);
+  }
+}
+@keyframes addPulse {
+  50% {
+    transform: scale(0.98);
+  }
+}
+@media (max-width: 520px) {
+  .skewer-demo {
+    padding: 0;
+    background: var(--paper);
+  }
+  .skewer-demo-shell {
+    width: 100%;
+    min-height: 100dvh;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .skewer-detail {
+    min-height: 100dvh;
+  }
+  .skewer-product {
+    min-height: 252px;
+  }
+  .skewer-order-bar {
+    position: fixed;
+    bottom: 0;
+    max-width: 480px;
+    left: 0;
+    right: 0;
+    margin: auto;
+    transform: none;
+    width: 100%;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  .skewer-demo-label {
+    margin-bottom: 11px;
+  }
+}
+@media (max-width: 360px) {
+  .skewer-grid {
+    grid-template-columns: 1fr;
+  }
+  .skewer-product {
+    min-height: 190px;
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    align-items: center;
+  }
+  .skewer-image-space {
+    height: 150px;
+  }
+  .skewer-product img {
+    width: 190px;
+  }
+  .skewer-category {
+    transform: scale(0.92);
+  }
+  .skewer-category[aria-current="true"] {
+    transform: translateY(-7px) scale(0.92);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skewer-demo *,
+  .skewer-demo *::before,
+  .skewer-demo *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
