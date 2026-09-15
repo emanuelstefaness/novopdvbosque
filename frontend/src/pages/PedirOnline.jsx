@@ -103,10 +103,12 @@ const CATEGORY_ICON_BY_SLUG = {
 }
 
 function categoryArcStyle(index, total) {
-  const angle = Math.PI - (Math.PI * index) / Math.max(1, total - 1)
+  const progress = index / Math.max(1, total - 1)
+  const normalizedX = progress * 2 - 1
+  const curve = 1 - Math.sqrt(Math.max(0, 1 - normalizedX * normalizedX))
   return {
-    '--arc-x': `${50 + 41 * Math.cos(angle)}%`,
-    '--arc-y': `${128 - 110 * Math.sin(angle)}px`,
+    '--arc-x': `${8 + progress * 84}%`,
+    '--arc-y': `${18 + curve * 110}px`,
   }
 }
 
