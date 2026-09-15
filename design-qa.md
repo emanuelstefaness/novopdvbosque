@@ -56,6 +56,8 @@
 15. Category photography was removed from the half-moon. Nine equal 48 px controls now use dedicated line icons, horizontally equidistant centers, and vertical positions calculated from an elliptical half-moon curve; `Todos` stays at the exact apex. Endpoint labels were verified clear of the catalog and neighboring controls.
 16. Items without a source photo no longer request guessed image filenames. They render immediately with the matching category icon and an explicit `Foto em breve` state.
 17. Category priority now radiates from the center as requested: Espetinhos/Lanches, Porções/Acompanhamentos, Pratos/Sobremesas, then Bebidas/Caipirinhas. All icons were redrawn as a consistent 1.85 px line set with literal food and drink silhouettes.
+18. Seven caipirinha product images now follow the supplied real Maracujá reference: the same tall cup, fruit texture, horizontal ice pop, angle, lighting, and transparent presentation, with the hand, clip, sign, and original background removed. Card and split-detail scale rules were verified separately for the tall drink silhouette.
+19. A full-history audit of the original `vendas` repository found no source photographs for Gado com Bacon e Legumes, Kafta, Medalhão de Frango, or Medalhão de Mandioca. Those four keep the explicit `Foto em breve` state so the public menu does not invent food photography while the official external originals are recovered.
 
 **Primary interactions tested**
 - Category filtering.

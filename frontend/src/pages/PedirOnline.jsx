@@ -45,6 +45,13 @@ const REAL_CUTOUT_IMAGE_BY_ITEM_NAME = {
   'prato feito do bosque': '/menu-real-cutouts/prato-feito-do-bosque.png',
   'salada do bosque': '/menu-real-cutouts/salada-do-bosque.png',
   'x-bosque': '/menu-real-cutouts/x-bosque.png',
+  'caipirinha maracuja': '/menu-real-cutouts/caipirinha-maracuja.png',
+  'caipirinha limao': '/menu-real-cutouts/caipirinha-limao.png',
+  'caipirinha morango': '/menu-real-cutouts/caipirinha-morango.png',
+  'caipirinha kiwi': '/menu-real-cutouts/caipirinha-kiwi.png',
+  'caipirinha abacaxi': '/menu-real-cutouts/caipirinha-abacaxi.png',
+  'caipirinha mista': '/menu-real-cutouts/caipirinha-mista.png',
+  'caipirinha yakult': '/menu-real-cutouts/caipirinha-yakult.png',
 }
 
 /**
@@ -166,6 +173,7 @@ function resolvePedirItemImages(itemName, apiBase) {
 
 function productVisualKind(itemName) {
   const name = normalize(itemName)
+  if (name.includes('caipirinha')) return 'drink'
   if (name.includes('churraspao') || name.includes('x-bosque') || name.includes('x bosque')) return 'sandwich'
   if (name.includes('entrevero') || name.includes('prato feito') || name.includes('salada do bosque')) return 'dish'
   return 'skewer'
