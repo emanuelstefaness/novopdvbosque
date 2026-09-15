@@ -809,7 +809,7 @@ export default function PedirOnline() {
 
   return (
     <div className="public-menu delivery-menu min-h-screen w-full overflow-x-hidden pb-28 text-slate-900">
-      <div className="delivery-top">
+      {step === 'menu' && <div className="delivery-top">
         <header className="delivery-header">
           <div className="delivery-heading">
             <h1>Com fome?</h1><span>Peça no Bosque.</span>
@@ -825,7 +825,6 @@ export default function PedirOnline() {
         {entregaGratis && (
           <p className="delivery-free">Entrega grátis hoje</p>
         )}
-        {step === 'menu' && (
           <nav className="delivery-category-arc" aria-label="Categorias do cardápio">
             <div className="delivery-category-orbit">
               {arcCategories.map((c, index) => {
@@ -840,8 +839,7 @@ export default function PedirOnline() {
               })}
             </div>
           </nav>
-        )}
-      </div>
+      </div>}
 
       {step === 'menu' && (
         <main className="mx-auto mt-5 w-full max-w-5xl px-4">
@@ -973,64 +971,70 @@ export default function PedirOnline() {
       )}
 
       {step === 'checkout' && (
-        <main className="mx-auto mt-5 w-full max-w-5xl px-4">
-          <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
-            <h3 className="text-xl font-semibold">Seu Pedido ({totalItems})</h3>
-            <ul className="mt-2 space-y-2 text-sm text-slate-700">
-              {cart.map((c, i) => (
-                <li key={`${c.id}-${c.user_note || ''}-${i}`} className="flex justify-between gap-2">
-                  <span>{c.quantity}x {c.name}</span>
-                  <span className="font-semibold">{formatPrice(c.quantity * c.price)}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3 space-y-1 border-t pt-3 text-sm text-slate-700">
-              <div className="flex justify-between">
-                <span>Subtotal (itens)</span>
-                <span className="font-semibold">{formatPrice(subtotalItens)}</span>
+        <main className="delivery-checkout-page">
+          <header className="delivery-checkout-header">
+            <button type="button" onClick={() => setStep('menu')} aria-label="Voltar ao cardápio"><Icon name="arrow" size={20} /></button>
+            <div><span>Finalização</span><h2>Seu pedido</h2></div>
+            <strong>{totalItems}</strong>
+          </header>
+
+          <form onSubmit={handleSubmitOrder} className="delivery-checkout-form">
+            {error && <p className="rounded-xl bg-red-100 p-3 text-sm text-red-700">{error}</p>}
+
+            <section className="delivery-checkout-block delivery-order-review">
+              {cart.map((item, i) => {
+                const source = menu.items.find((product) => Number(product.id) === Number(item.id))
+                const image = source?.image || source?.imageFallback
+                return (
+                  <article key={`${item.id}-${item.user_note || ''}-${i}`}>
+                    <div className={`delivery-checkout-thumb ${source?.transparent ? 'is-cutout' : ''}`}>
+                      {image ? <img src={image} alt="" /> : <Icon name="receipt" size={25} />}
+                    </div>
+                    <div className="delivery-checkout-item-copy">
+                      <h3>{item.name}</h3>
+                      <p>{item.quantity} {item.quantity === 1 ? 'unidade' : 'unidades'}{item.user_note ? ` · ${item.user_note}` : ''}</p>
+                      <strong>{formatPrice(item.price * item.quantity)}</strong>
+                    </div>
+                    <div className="delivery-checkout-qty" aria-label={`Quantidade de ${item.name}`}>
+                      <button type="button" onClick={() => updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, -1)}>−</button>
+                      <b>{item.quantity}</b>
+                      <button type="button" onClick={() => updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, 1)}>+</button>
+                    </div>
+                  </article>
+                )
+              })}
+            </section>
+
+            <section className="delivery-checkout-block">
+              <div className="delivery-checkout-block-title"><span><Icon name="pin" size={19} /></span><div><small>Como você quer receber?</small><strong>{checkout.tipo === 'delivery' ? 'Entregar em casa' : 'Retirar no Bosque'}</strong></div></div>
+              <div className="delivery-choice-toggle">
+                <button type="button" onClick={() => setCheckout((c) => ({ ...c, tipo: 'retirada' }))} className={checkout.tipo === 'retirada' ? 'is-active' : ''}>Retirada</button>
+                <button type="button" onClick={() => setCheckout((c) => ({ ...c, tipo: 'delivery' }))} className={checkout.tipo === 'delivery' ? 'is-active' : ''}>Entrega{entregaGratis ? ' grátis' : ''}</button>
               </div>
+
               {checkout.tipo === 'delivery' && (
-                <div className="flex justify-between text-slate-600">
-                  <span>Taxa de entrega</span>
-                  <span className={`font-semibold ${taxaEntrega === 0 ? 'text-emerald-600' : ''}`}>
-                    {taxaEntrega === 0 ? 'Grátis' : formatPrice(taxaEntrega)}
-                  </span>
+                <div className="delivery-address-fields">
+                  <input placeholder="Rua *" value={checkout.endereco_rua} onChange={(e) => setCheckout((c) => ({ ...c, endereco_rua: e.target.value }))} />
+                  <div>
+                    <input placeholder="Número *" value={checkout.endereco_numero} onChange={(e) => setCheckout((c) => ({ ...c, endereco_numero: e.target.value }))} />
+                    <input placeholder="Complemento" value={checkout.endereco_complemento} onChange={(e) => setCheckout((c) => ({ ...c, endereco_complemento: e.target.value }))} />
+                  </div>
+                  <input placeholder="Bairro *" value={checkout.endereco_bairro} onChange={(e) => setCheckout((c) => ({ ...c, endereco_bairro: e.target.value }))} />
+                  <input placeholder="Ponto de referência" value={checkout.endereco_referencia} onChange={(e) => setCheckout((c) => ({ ...c, endereco_referencia: e.target.value }))} />
                 </div>
               )}
-              <p className="pt-1 text-lg font-bold text-slate-900">Total: {formatPrice(totalPrice)}</p>
-            </div>
-          </div>
+            </section>
 
-          <form onSubmit={handleSubmitOrder} className="space-y-4">
-            {error && <p className="rounded-xl bg-red-100 p-3 text-sm text-red-700">{error}</p>}
-            <input className="w-full rounded-xl border px-4 py-3" placeholder="Nome completo *" required value={checkout.cliente_nome} onChange={(e) => setCheckout((c) => ({ ...c, cliente_nome: e.target.value }))} />
-            <input className="w-full rounded-xl border px-4 py-3" placeholder="Telefone / WhatsApp *" required value={checkout.cliente_telefone} onChange={(e) => setCheckout((c) => ({ ...c, cliente_telefone: e.target.value }))} />
-            <input className="w-full rounded-xl border px-4 py-3" placeholder="E-mail (opcional)" value={checkout.cliente_email} onChange={(e) => setCheckout((c) => ({ ...c, cliente_email: e.target.value }))} />
+            <section className="delivery-checkout-block delivery-customer-fields">
+              <div className="delivery-checkout-block-title"><span><Icon name="user" size={19} /></span><div><small>Dados para contato</small><strong>Quem está pedindo?</strong></div></div>
+              <input placeholder="Nome completo *" required value={checkout.cliente_nome} onChange={(e) => setCheckout((c) => ({ ...c, cliente_nome: e.target.value }))} />
+              <input placeholder="Telefone / WhatsApp *" required value={checkout.cliente_telefone} onChange={(e) => setCheckout((c) => ({ ...c, cliente_telefone: e.target.value }))} />
+              <input placeholder="E-mail (opcional)" value={checkout.cliente_email} onChange={(e) => setCheckout((c) => ({ ...c, cliente_email: e.target.value }))} />
+            </section>
 
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setCheckout((c) => ({ ...c, tipo: 'retirada' }))} className={`rounded-xl border px-4 py-3 font-semibold ${checkout.tipo === 'retirada' ? 'border-[hsl(var(--menu-primary))] bg-orange-50' : 'border-slate-300 bg-white'}`}>Retirada</button>
-              <button type="button" onClick={() => setCheckout((c) => ({ ...c, tipo: 'delivery' }))} className={`rounded-xl border px-4 py-3 font-semibold ${checkout.tipo === 'delivery' ? 'border-[hsl(var(--menu-primary))] bg-orange-50' : 'border-slate-300 bg-white'}`}>
-                Delivery{entregaGratis ? ' · grátis' : ''}
-              </button>
-            </div>
-
-            {checkout.tipo === 'delivery' && (
-              <div className="space-y-2 rounded-2xl border bg-white p-4">
-                <input className="w-full rounded-xl border px-4 py-3" placeholder="Rua *" value={checkout.endereco_rua} onChange={(e) => setCheckout((c) => ({ ...c, endereco_rua: e.target.value }))} />
-                <div className="grid grid-cols-2 gap-2">
-                  <input className="w-full rounded-xl border px-4 py-3" placeholder="Número *" value={checkout.endereco_numero} onChange={(e) => setCheckout((c) => ({ ...c, endereco_numero: e.target.value }))} />
-                  <input className="w-full rounded-xl border px-4 py-3" placeholder="Complemento" value={checkout.endereco_complemento} onChange={(e) => setCheckout((c) => ({ ...c, endereco_complemento: e.target.value }))} />
-                </div>
-                <input className="w-full rounded-xl border px-4 py-3" placeholder="Bairro *" value={checkout.endereco_bairro} onChange={(e) => setCheckout((c) => ({ ...c, endereco_bairro: e.target.value }))} />
-                <input className="w-full rounded-xl border px-4 py-3" placeholder="Referência" value={checkout.endereco_referencia} onChange={(e) => setCheckout((c) => ({ ...c, endereco_referencia: e.target.value }))} />
-              </div>
-            )}
-
-            <input className="w-full rounded-xl border px-4 py-3" placeholder="Observações (opcional)" value={checkout.observacoes} onChange={(e) => setCheckout((c) => ({ ...c, observacoes: e.target.value }))} />
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="mb-3 text-sm font-semibold text-slate-800">Forma de pagamento *</p>
-              <div className="grid gap-2 sm:grid-cols-2">
+            <section className="delivery-checkout-block delivery-payment-block">
+              <div className="delivery-checkout-block-title"><span><Icon name="wallet" size={19} /></span><div><small>Pagamento na entrega</small><strong>Escolha como pagar</strong></div></div>
+              <div className="delivery-payment-grid">
                 {[
                   ['pix', 'PIX'],
                   ['dinheiro', 'Dinheiro'],
@@ -1040,9 +1044,7 @@ export default function PedirOnline() {
                 ].map(([val, lab]) => (
                   <label
                     key={val}
-                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium ${
-                      checkout.forma_pagamento === val ? 'border-[hsl(var(--menu-primary))] bg-orange-50' : 'border-slate-200 bg-slate-50'
-                    }`}
+                    className={checkout.forma_pagamento === val ? 'is-active' : ''}
                   >
                     <input
                       type="radio"
@@ -1050,15 +1052,25 @@ export default function PedirOnline() {
                       value={val}
                       checked={checkout.forma_pagamento === val}
                       onChange={() => setCheckout((c) => ({ ...c, forma_pagamento: val }))}
-                      className="h-4 w-4 accent-[hsl(var(--menu-primary))]"
                     />
-                    {lab}
+                    <span>{lab}</span><b>✓</b>
                   </label>
                 ))}
               </div>
-            </div>
+            </section>
 
-            <button type="submit" disabled={submitting} className="w-full rounded-xl bg-black py-4 text-lg font-semibold text-white disabled:opacity-70">
+            <label className="delivery-checkout-note">
+              <Icon name="receipt" size={18} />
+              <input placeholder="Adicionar observação ao pedido" value={checkout.observacoes} onChange={(e) => setCheckout((c) => ({ ...c, observacoes: e.target.value }))} />
+            </label>
+
+            <section className="delivery-checkout-totals">
+              <div><span>Subtotal</span><b>{formatPrice(subtotalItens)}</b></div>
+              <div><span>Entrega</span><b className={taxaEntrega === 0 ? 'is-free' : ''}>{checkout.tipo === 'retirada' ? 'Retirada' : taxaEntrega === 0 ? 'Grátis' : formatPrice(taxaEntrega)}</b></div>
+              <div className="is-total"><span>Total</span><strong>{formatPrice(totalPrice)}</strong></div>
+            </section>
+
+            <button type="submit" disabled={submitting} className="delivery-confirm-order">
               {submitting ? 'Enviando...' : `Confirmar pedido - ${formatPrice(totalPrice)}`}
             </button>
           </form>
@@ -1205,84 +1217,66 @@ export default function PedirOnline() {
       })()}
 
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 bg-black/45" onClick={() => setIsCartOpen(false)}>
+        <div className="delivery-cart-overlay" onClick={() => setIsCartOpen(false)}>
           <aside
-            className="absolute right-0 top-0 flex h-full min-h-0 w-full max-w-md flex-col bg-white shadow-float"
+            className="delivery-cart-panel"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-4">
-              <h3 className="text-2xl font-semibold">Seu Pedido ({totalItems})</h3>
-              <button type="button" onClick={() => setIsCartOpen(false)} className="rounded-lg border px-3 py-1">X</button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3 [-webkit-overflow-scrolling:touch]">
-              {cart.length === 0 && <p className="text-slate-600">Carrinho vazio.</p>}
+            <header className="delivery-cart-header">
+              <button type="button" onClick={() => setIsCartOpen(false)} aria-label="Voltar"><Icon name="arrow" size={20} /></button>
+              <div><span>Revise antes de continuar</span><h3>Seu pedido</h3></div>
+              <b>{totalItems}</b>
+            </header>
+            <div className="delivery-cart-scroll">
+              {cart.length === 0 && <div className="delivery-cart-empty"><Icon name="orders" size={34} /><strong>Seu carrinho está vazio</strong><span>Escolha algo gostoso no cardápio.</span></div>}
               {cart.length > 0 && (
-                <div className="space-y-2">
-                  {cart.map((item, i) => (
-                    <div
+                <div className="delivery-cart-items">
+                  {cart.map((item, i) => {
+                    const source = menu.items.find((product) => Number(product.id) === Number(item.id))
+                    const image = source?.image || source?.imageFallback
+                    return (
+                    <article
                       key={`${item.id}-${item.user_note || ''}-${item.prato_feito_espetinho_id || ''}-${item.extra_caramelized_onion ? '1' : '0'}-${item.extra_hamburger ? '1' : '0'}-${i}`}
-                      className="rounded-xl border p-3"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-semibold">{item.name}</p>
-                        <p className="font-bold">{formatPrice(item.price * item.quantity)}</p>
+                      <div className={`delivery-cart-thumb ${source?.transparent ? 'is-cutout' : ''}`}>
+                        {image ? <img src={image} alt="" /> : <Icon name="receipt" size={24} />}
                       </div>
-                      {item.user_note && <p className="mt-1 text-xs text-slate-500">{item.user_note}</p>}
-                      {(item.extra_caramelized_onion || item.extra_hamburger) && (
-                        <p className="mt-1 text-xs font-medium text-emerald-800">
+                      <div className="delivery-cart-item-copy">
+                        <h4>{item.name}</h4>
+                        {item.user_note && <p>{item.user_note}</p>}
+                        {(item.extra_caramelized_onion || item.extra_hamburger) && (
+                          <p>
                           {item.extra_caramelized_onion ? `+ cebola caramelizada (${formatPrice(PRECO_CEbola_CARAMELIZADA)})` : ''}
                           {item.extra_caramelized_onion && item.extra_hamburger ? ' · ' : ''}
                           {item.extra_hamburger ? `+ hambúrguer extra (${formatPrice(PRECO_HAMBURGUER_EXTRA)})` : ''}
-                        </p>
-                      )}
-                      <div className="mt-2 flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="h-9 w-9 rounded-full border font-bold"
-                          onClick={() =>
-                            updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, -1)
-                          }
-                        >
-                          -
-                        </button>
-                        <span className="w-8 text-center font-bold">{item.quantity}</span>
-                        <button
-                          type="button"
-                          className="h-9 w-9 rounded-full border font-bold"
-                          onClick={() =>
-                            updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, 1)
-                          }
-                        >
-                          +
-                        </button>
+                          </p>
+                        )}
+                        <strong>{formatPrice(item.price * item.quantity)}</strong>
                       </div>
-                    </div>
-                  ))}
+                      <div className="delivery-cart-qty">
+                        <button type="button" onClick={() => updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, -1)}>−</button>
+                        <b>{item.quantity}</b>
+                        <button type="button" onClick={() => updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, 1)}>+</button>
+                      </div>
+                    </article>
+                    )
+                  })}
                 </div>
               )}
             </div>
             {cart.length > 0 && (
-              <div className="shrink-0 space-y-1 border-t border-slate-200 bg-white px-4 py-4 text-sm text-slate-600">
-                <div className="flex justify-between">
-                  <span>Subtotal (itens)</span>
-                  <span className="font-semibold">{formatPrice(subtotalItens)}</span>
-                </div>
-                {checkout.tipo === 'delivery' && (
-                  <div className="flex justify-between">
-                    <span>Taxa de entrega</span>
-                    <span className={`font-semibold ${taxaEntrega === 0 ? 'text-emerald-600' : ''}`}>
-                      {taxaEntrega === 0 ? 'Grátis' : formatPrice(taxaEntrega)}
-                    </span>
-                  </div>
-                )}
-                <p className="pt-1 text-xl font-semibold text-slate-900">Total: {formatPrice(totalPrice)}</p>
-                <button type="button" onClick={() => { setIsCartOpen(false); setStep('checkout') }} className="mt-3 w-full rounded-xl bg-black py-3 font-semibold text-white">
-                  Finalizar pedido
+              <footer className="delivery-cart-footer">
+                <button type="button" className="delivery-cart-route" onClick={() => setCheckout((c) => ({ ...c, tipo: c.tipo === 'delivery' ? 'retirada' : 'delivery' }))}>
+                  <span><Icon name={checkout.tipo === 'delivery' ? 'pin' : 'orders'} size={19} /></span>
+                  <div><small>Recebimento</small><strong>{checkout.tipo === 'delivery' ? 'Entregar em casa' : 'Retirar no Bosque'}</strong></div>
+                  <b>Alterar</b>
                 </button>
-                <button type="button" onClick={clearCart} className="mt-2 w-full rounded-xl border border-slate-300 py-2.5 font-semibold text-slate-700">
-                  Limpar carrinho
+                <div className="delivery-cart-total"><span>Total</span><strong>{formatPrice(totalPrice)}</strong></div>
+                <button type="button" onClick={() => { setIsCartOpen(false); setStep('checkout') }} className="delivery-cart-continue">
+                  Ir para pagamento <Icon name="arrow" size={18} />
                 </button>
-              </div>
+                <button type="button" onClick={clearCart} className="delivery-cart-clear">Limpar carrinho</button>
+              </footer>
             )}
           </aside>
         </div>
