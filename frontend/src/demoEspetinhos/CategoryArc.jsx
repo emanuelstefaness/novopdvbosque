@@ -1,8 +1,10 @@
+import Icon from '../components/Icon'
+
 const positions = [
-  { x: '8%', y: '54px' },
-  { x: '29%', y: '22px' },
-  { x: '54%', y: '10px' },
-  { x: '79%', y: '35px' },
+  { x: '8%', y: '44px' },
+  { x: '30%', y: '23px' },
+  { x: '52%', y: '15px' },
+  { x: '74%', y: '31px' },
 ]
 
 export default function CategoryArc({ categories, activeId, onSelect }) {
@@ -16,7 +18,11 @@ export default function CategoryArc({ categories, activeId, onSelect }) {
       aria-current={activeId === category.id ? 'true' : undefined}
       onClick={() => onSelect(category.id)}
     >
-      <span className="skewer-category-icon" aria-hidden="true">{category.icon}</span>
+      <span className="skewer-category-icon" aria-hidden="true">
+        {category.image
+          ? <img src={category.image} alt="" />
+          : <Icon name={category.icon} size={19} />}
+      </span>
       <span>{category.label}</span>
     </button>)}
   </nav>

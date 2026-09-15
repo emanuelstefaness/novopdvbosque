@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import CategoryArc from './CategoryArc'
 import { demoCategories, demoSkewers } from './demoData'
 import { runDemoTransition } from './useDemoTransition'
+import Icon from '../components/Icon'
 import './espetinhosDemo.css'
 
 const money = value => Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -70,19 +71,13 @@ export default function EspetinhosDemo() {
     <div className="skewer-demo-shell">
       {!selected ? <>
         <header className="skewer-home-header">
-          <div className="skewer-brand">
-            <img src="/logo-bosque-transparente.png" alt="Bosque da Carne" />
-            <span>Feito na brasa</span>
-          </div>
+          <div className="skewer-home-title"><strong>Com fome?</strong> <span>Peça no Bosque.</span></div>
           <button className={`skewer-cart ${cartCount ? 'has-items' : ''}`} type="button" aria-label={`Carrinho, ${cartCount} itens`}>
-            <span aria-hidden="true">⌑</span>{cartCount > 0 && <b>{cartCount}</b>}
+            <Icon name="orders" size={20} />{cartCount > 0 && <b>{cartCount}</b>}
           </button>
         </header>
 
-        <section className="skewer-intro">
-          <p>Direto da churrasqueira</p>
-          <h1>Qual vai para<br/><em>a sua mesa?</em></h1>
-        </section>
+        <div className="skewer-search"><Icon name="search" size={16} /><span>Buscar espetinho</span></div>
 
         <CategoryArc categories={demoCategories} activeId={activeCategory} onSelect={chooseCategory} />
 
@@ -108,31 +103,35 @@ export default function EspetinhosDemo() {
         <p className="skewer-demo-label">Demonstração visual · nenhum pedido será enviado</p>
       </> : <section className="skewer-detail" aria-labelledby="skewer-detail-title">
         <header className="skewer-detail-header">
-          <button type="button" onClick={closeDetails} aria-label="Voltar aos espetinhos">←</button>
-          <img src="/logo-bosque-transparente.png" alt="Bosque da Carne" />
-          <button type="button" aria-label="Favoritar produto">♡</button>
+          <button type="button" onClick={closeDetails} aria-label="Voltar aos espetinhos"><Icon name="arrow" size={19} /></button>
+          <button type="button" aria-label="Favoritar produto" className="skewer-heart">♡</button>
         </header>
 
         <div className="skewer-detail-visual">
-          <span>Na brasa</span>
+          <div className="skewer-hero-copy">
+            <p>Espetinho do Bosque</p>
+            <h1 id="skewer-detail-title">{selected.name}</h1>
+            <small>{selected.description.split(',')[0]}</small>
+            <div className="skewer-rating"><b>★ ★ ★ ★ ★</b> <span>(4,8)</span></div>
+            <strong>{money(selected.price)}</strong>
+            <dl><div><dt>Preparo</dt><dd>Na brasa</dd></div><div><dt>Porção</dt><dd>1 espetinho</dd></div></dl>
+          </div>
           <div className="skewer-glow" aria-hidden="true" />
           <img src={selected.image} alt={selected.name} style={{ viewTransitionName: `skewer-${selected.id}` }} />
-          <small aria-hidden="true">BRASA<br/>VIVA</small>
         </div>
 
         <div className="skewer-detail-copy">
-          <p className="skewer-reveal step-1">Espetinho do Bosque</p>
-          <h1 id="skewer-detail-title" className="skewer-reveal step-2">{selected.name}</h1>
-          <div className="skewer-detail-price skewer-reveal step-3"><strong>{money(selected.price)}</strong><span>preparado na hora</span></div>
-          <p className="skewer-description skewer-reveal step-4">{selected.description}</p>
-
           {selected.asksPoint && <fieldset className="skewer-point skewer-reveal step-5">
-            <legend>Como prefere?</legend>
+            <legend>Ponto da carne</legend>
             <div>{['Malpassado', 'Ao ponto', 'Bem passado'].map(point => <button
               type="button" key={point} onClick={() => setMeatPoint(point)}
               aria-pressed={meatPoint === point}
             >{point}</button>)}</div>
           </fieldset>}
+          <div className="skewer-extras skewer-reveal step-5">
+            <span>Farofa</span><span>Vinagrete</span><span>Molho da casa</span>
+          </div>
+          <p className="skewer-description skewer-reveal step-4">Preparado na hora, com o sabor da churrasqueira do Bosque da Carne.</p>
         </div>
 
         <div className="skewer-order-bar skewer-reveal step-6">

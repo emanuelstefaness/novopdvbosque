@@ -1,8 +1,8 @@
 export const demoCategories = [
-  { id: 'gado', label: 'Gado', icon: '◆' },
-  { id: 'frango', label: 'Frango', icon: '●' },
-  { id: 'todos', label: 'Todos', icon: '✦' },
-  { id: 'queijos', label: 'Queijos', icon: '■' },
+  { id: 'gado', label: 'Gado', image: '/demo-espetinhos/gado-bacon.png' },
+  { id: 'frango', label: 'Frango', image: '/demo-espetinhos/coracao-frango.png' },
+  { id: 'todos', label: 'Todos', icon: 'grid' },
+  { id: 'queijos', label: 'Queijos', image: '/demo-espetinhos/queijo-coalho.png' },
 ]
 
 export const demoSkewers = [
