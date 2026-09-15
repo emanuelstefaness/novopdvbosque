@@ -130,7 +130,7 @@
 .delivery-modal-summary { position:relative; z-index:2; width:48%; min-height:315px; padding:72px 0 20px; }
 .delivery-modal-summary > span { color:var(--delivery-ember); font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
 .delivery-modal-summary h3 { margin:5px 0 0; color:#1e2521; font:700 27px/.98 "Fraunces",Georgia,serif; letter-spacing:-.035em; }
-.delivery-modal-summary p { margin:8px 0 0; color:#777e78; font-size:11px; line-height:1.45; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.delivery-modal-summary p { margin:8px 0 0; color:#777e78; font-size:11px; line-height:1.5; overflow:visible; }
 .delivery-modal-summary strong { display:block; margin-top:14px; color:var(--delivery-ember); font-size:22px; }
 
 /* Carrinho e pagamento: resumo compacto inspirado em comanda, com identidade Bosque. */
