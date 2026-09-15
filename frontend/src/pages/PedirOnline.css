@@ -53,8 +53,10 @@
 .delivery-category-arc button > span {
   position:relative;
   width:48px; height:48px; overflow:hidden; border:1px solid #dce1db; border-radius:50%;
-  display:grid; place-items:center; background:#fff; color:#232a26; box-shadow:0 7px 18px rgba(35,59,48,.12);
+  display:grid; place-items:center; background:#fffdf9; color:#24312b; box-shadow:0 7px 18px rgba(35,59,48,.12);
 }
+.delivery-category-arc button > span svg { stroke-width:1.85; }
+.delivery-category-arc button.is-active > span { border-color:#cad8d0; color:var(--delivery-forest); box-shadow:0 9px 22px rgba(21,63,53,.18); }
 .delivery-category-arc b { font-size:10px; font-weight:600; white-space:nowrap; }
 .delivery-category-arc button.is-active { color:var(--delivery-forest); transform:translate(-50%,-7px); }
 .delivery-category-arc button.is-active::after { content:""; width:22px; height:2px; margin-top:-2px; border-radius:2px; background:#191d1a; }

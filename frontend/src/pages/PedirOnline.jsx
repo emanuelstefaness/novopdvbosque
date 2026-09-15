@@ -353,9 +353,19 @@ export default function PedirOnline() {
   }, [menu.categories, categoriesBySlug])
 
   const arcCategories = useMemo(() => {
-    const middle = Math.ceil(orderedCategories.length / 2)
-    return [...orderedCategories.slice(0, middle), null, ...orderedCategories.slice(middle)]
-  }, [orderedCategories])
+    const requestedOrder = [
+      'bebidas',
+      'pratos',
+      'porcoes',
+      'espetinhos',
+      null,
+      'lanches',
+      'acompanhamentos',
+      'sobremesas',
+      'caipirinhas',
+    ]
+    return requestedOrder.map((slug) => slug === null ? null : categoriesBySlug[slug]).filter((category, index) => category || requestedOrder[index] === null)
+  }, [categoriesBySlug])
 
   const espetinhosOnline = useMemo(() => {
     const espetinhosCat = (menu.categories || []).find((c) => c.slug === 'espetinhos')

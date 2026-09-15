@@ -55,6 +55,7 @@
 14. The Churraspão de coração now uses the distinct open-faced heart filling visible in its original Bosque photograph, instead of repeating the closed Churraspão image from the background of that source photo.
 15. Category photography was removed from the half-moon. Nine equal 48 px controls now use dedicated line icons, horizontally equidistant centers, and vertical positions calculated from an elliptical half-moon curve; `Todos` stays at the exact apex. Endpoint labels were verified clear of the catalog and neighboring controls.
 16. Items without a source photo no longer request guessed image filenames. They render immediately with the matching category icon and an explicit `Foto em breve` state.
+17. Category priority now radiates from the center as requested: Espetinhos/Lanches, Porções/Acompanhamentos, Pratos/Sobremesas, then Bebidas/Caipirinhas. All icons were redrawn as a consistent 1.85 px line set with literal food and drink silhouettes.
 
 **Primary interactions tested**
 - Category filtering.
