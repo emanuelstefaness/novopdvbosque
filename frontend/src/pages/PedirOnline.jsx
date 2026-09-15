@@ -11,6 +11,8 @@ import {
   PRECO_CEbola_CARAMELIZADA,
   PRECO_HAMBURGUER_EXTRA
 } from '../utils/lancheAddons'
+import Icon from '../components/Icon'
+import './PedirOnline.css'
 
 const API = getApiBase()
 /** Fallback se a API ainda não devolveu a taxa (backend antigo). */
@@ -30,6 +32,11 @@ const IMAGE_FILE_BY_ITEM_NAME = {
   'salada do bosque': 'salada do bosque.png',
   'x-bosque': 'xbosque.png',
   'churraspao de coracao': 'churraspao-coracao.png'
+}
+const TRANSPARENT_DEMO_IMAGE_BY_ITEM_NAME = {
+  'gado com bacon': '/demo-espetinhos/gado-bacon.png',
+  'coracao de frango': '/demo-espetinhos/coracao-frango.png',
+  'queijo coalho': '/demo-espetinhos/queijo-coalho.png',
 }
 
 /**
@@ -122,8 +129,10 @@ function fotocardapioPublicUrl(itemName) {
 }
 
 function resolvePedirItemImages(itemName, apiBase) {
+  const transparent = TRANSPARENT_DEMO_IMAGE_BY_ITEM_NAME[normalize(itemName)]
   const local = fotocardapioPublicUrl(itemName)
   const api = apiBase ? getItemImageUrl(apiBase, itemName) : null
+  if (transparent) return { image: transparent, imageFallback: local || api || null, transparent: true }
   if (local && api && local !== api) return { image: local, imageFallback: api }
   if (local) return { image: local, imageFallback: api || null }
   return { image: api || null, imageFallback: null }
@@ -135,37 +144,33 @@ function ProductCard({ item, badges = [], onOpen }) {
   const onImgError=()=>setFailedImages(prev=>[...prev,imgSrc])
 
   return (
-    <article
-      onClick={() => onOpen(item)}
-      className="group cursor-pointer border-b border-slate-200 bg-white py-4"
-    >
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate text-xl font-semibold text-slate-900">{item.name}</h3>
-          <p className="mt-1 line-clamp-4 text-sm leading-5 text-slate-500">
+    <article className={`delivery-product-card ${item.transparent ? 'has-transparent-image' : ''}`}>
+      <button type="button" onClick={() => onOpen(item)} className="delivery-product-hit" aria-label={`Abrir ${item.name}, ${formatPrice(item.price)}`}>
+        <div className="delivery-product-image">
+          {imgSrc ? (
+            <img src={imgSrc} alt="" onError={onImgError} />
+          ) : (
+            <div className="delivery-image-fallback">{item.name?.charAt(0) || ''}</div>
+          )}
+        </div>
+        <div className="delivery-product-copy">
+          <h3>{item.name}</h3>
+          <p>
             {textoDescricaoItemPedir(item)}
           </p>
           {badges.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="delivery-badges">
               {badges.map((b) => (
-                <span key={b} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                <span key={b}>
                   {b}
                 </span>
               ))}
             </div>
           )}
-          <p className="mt-2 text-lg font-semibold text-slate-800">{formatPrice(item.price)}</p>
+          <strong>{formatPrice(item.price)}</strong>
         </div>
-        <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-          {imgSrc ? (
-            <img src={imgSrc} alt={item.name} className="h-full w-full object-cover" onError={onImgError} />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
-              <span className="text-3xl font-bold text-slate-400">{item.name?.charAt(0) || ''}</span>
-            </div>
-          )}
-        </div>
-      </div>
+        <span className="delivery-product-plus" aria-hidden="true">+</span>
+      </button>
     </article>
   )
 }
@@ -223,7 +228,8 @@ export default function PedirOnline() {
   const [comboPfSelections, setComboPfSelections] = useState({})
   const [lastSuggestedAddedId, setLastSuggestedAddedId] = useState(null)
   const [cart, setCart] = useState([])
-  const [activeCatId, setActiveCatId] = useState(null)
+  const [activeCatId, setActiveCatId] = useState('all')
+  const [menuSearch, setMenuSearch] = useState('')
   const [checkout, setCheckout] = useState({
     tipo: 'retirada',
     cliente_nome: '',
@@ -250,8 +256,8 @@ export default function PedirOnline() {
       })
       .then((data) => {
         const items = (data.items || []).map((it) => {
-          const { image, imageFallback } = resolvePedirItemImages(it.name, apiBase)
-          return { ...it, image, imageFallback }
+          const { image, imageFallback, transparent } = resolvePedirItemImages(it.name, apiBase)
+          return { ...it, image, imageFallback, transparent: !!transparent }
         })
         setMenu({ ...data, items })
         setOnlineAtivo(data.online_ativo !== false)
@@ -321,11 +327,18 @@ export default function PedirOnline() {
       .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'))
   }, [menu.categories, menu.items])
 
-  useEffect(() => {
-    if (!activeCatId && orderedCategories.length > 0) {
-      setActiveCatId(orderedCategories[0].id)
-    }
-  }, [orderedCategories, activeCatId])
+  const visibleMenuItems = useMemo(() => {
+    const visible = activeCatId === 'all'
+      ? (menu.items || []).filter((item) => {
+          const cat = (menu.categories || []).find((c) => c.id === item.category_id)
+          return cat && !HIDDEN_CATEGORY_SLUGS.includes(cat.slug)
+        })
+      : (itemsByCategory.get(activeCatId) || [])
+    const query = normalize(menuSearch.trim())
+    return [...visible]
+      .filter((item) => !query || normalize(`${item.name} ${textoDescricaoItemPedir(item)}`).includes(query))
+      .sort(bySort)
+  }, [activeCatId, menuSearch, menu.items, menu.categories, itemsByCategory])
 
   const destaqueCoracaoItem = useMemo(() => {
     const all = menu.items || []
@@ -684,43 +697,35 @@ export default function PedirOnline() {
   }
 
   return (
-    <div className="public-menu min-h-screen w-full overflow-x-hidden bg-slate-50 pb-28 text-slate-900">
-      <div className="sticky top-0 z-40 w-full border-b border-slate-800 bg-black shadow-lg">
-        <header className="px-4 py-4 text-white">
-          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
-            <h1><img src="/logo-bosque-transparente.png" alt="Bosque da Carne" width="64" height="64" className="establishment-logo" /></h1>
-            <div className="flex shrink-0 items-center gap-2">
-              <Link to="/acompanhar" className="rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-medium">
-                Acompanhar
-              </Link>
-              <button
-                type="button"
-                onClick={() => setIsCartOpen(true)}
-                className="rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-medium"
-              >
-                Carrinho ({totalItems})
-              </button>
-            </div>
+    <div className="public-menu delivery-menu min-h-screen w-full overflow-x-hidden pb-28 text-slate-900">
+      <div className="delivery-top">
+        <header className="delivery-header">
+          <div className="delivery-heading">
+            <h1>Com fome?</h1><span>Peça no Bosque.</span>
           </div>
-          <p className="mx-auto mt-1 w-full max-w-5xl text-xs text-slate-300">Pedidos online</p>
+          <button type="button" onClick={() => setIsCartOpen(true)} className="delivery-cart-button" aria-label={`Carrinho, ${totalItems} itens`}>
+            <Icon name="orders" size={20} />{totalItems > 0 && <b>{totalItems}</b>}
+          </button>
         </header>
+        <label className="delivery-search">
+          <Icon name="search" size={16} />
+          <input value={menuSearch} onChange={(event) => setMenuSearch(event.target.value)} placeholder="Buscar no cardápio" />
+        </label>
         {entregaGratis && (
-          <p className="mx-auto w-full max-w-5xl bg-emerald-600 px-4 py-2 text-center text-sm font-semibold text-white">
-             Entrega grátis hoje!
-          </p>
+          <p className="delivery-free">Entrega grátis hoje</p>
         )}
         {step === 'menu' && (
-          <nav className="no-scrollbar mx-auto flex w-full max-w-5xl gap-5 overflow-x-auto border-t border-slate-200 bg-white px-4 py-3">
-            {orderedCategories.map((c) => (
-              <a
-                key={c.id}
-                href={`#cat-${c.id}`}
-                onClick={() => setActiveCatId(c.id)}
-                className={`shrink-0 border-b-2 pb-1 text-sm font-semibold ${activeCatId === c.id ? 'border-red-600 text-red-600' : 'border-transparent text-slate-700'}`}
-              >
-                {c.name}
-              </a>
-            ))}
+          <nav className="delivery-category-arc no-scrollbar" aria-label="Categorias do cardápio">
+            <button type="button" className={activeCatId === 'all' ? 'is-active' : ''} onClick={() => setActiveCatId('all')}>
+              <span><Icon name="grid" size={19} /></span><b>Todos</b>
+            </button>
+            {orderedCategories.map((c) => {
+              const representative = (itemsByCategory.get(c.id) || []).find((item) => item.image)
+              return <button type="button" key={c.id} className={activeCatId === c.id ? 'is-active' : ''} onClick={() => setActiveCatId(c.id)}>
+                <span><Icon name="book" size={19} />{representative && <img src={representative.image} alt="" onError={(event) => event.currentTarget.remove()} />}</span>
+                <b>{c.name}</b>
+              </button>
+            })}
           </nav>
         )}
       </div>
@@ -742,6 +747,22 @@ export default function PedirOnline() {
               <button type="button" onClick={loadMenu} className="ml-2 rounded bg-red-100 px-2 py-1 font-semibold">Tentar novamente</button>
             </div>
           )}
+
+          <section className="delivery-catalog">
+            <div className="delivery-catalog-heading">
+              <div><span>Escolha o seu</span><h2>{activeCatId === 'all' ? 'Cardápio' : orderedCategories.find((c) => c.id === activeCatId)?.name}</h2></div>
+              <small>{visibleMenuItems.length} {visibleMenuItems.length === 1 ? 'opção' : 'opções'}</small>
+            </div>
+            <div className="delivery-products-grid">
+              {visibleMenuItems.map((item) => {
+                const n = normalize(item.name)
+                const badges = []
+                if (n.includes('gado') && n.includes('bacon')) badges.push('Mais pedido')
+                if (n.includes('churraspao') || n.includes('prato feito')) badges.push('Favorito')
+                return <ProductCard key={item.id} item={item} badges={badges} onOpen={setModalProduct} />
+              })}
+            </div>
+          </section>
 
           {destaqueCoracaoItem && (
             <section className="mb-8 overflow-hidden rounded-2xl border-2 border-[hsl(var(--menu-primary))] bg-gradient-to-br from-orange-50 via-white to-amber-50/80 shadow-xl ring-1 ring-orange-200/60">
@@ -942,10 +963,17 @@ export default function PedirOnline() {
             setModalExtraBurger(false)
           }}
         >
-          <div className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-float sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-2xl font-semibold">{modalProduct.name}</h3>
-            <p className="mt-1 text-sm leading-relaxed text-slate-600">{textoDescricaoItemPedir(modalProduct)}</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">{formatPrice(modalUnitWithAddons)}</p>
+          <div className="delivery-product-modal w-full max-w-md rounded-t-3xl bg-white p-5 shadow-float sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="delivery-modal-close" aria-label="Fechar detalhes" onClick={() => setModalProduct(null)}>×</button>
+            <div className={`delivery-modal-hero ${modalProduct.transparent ? 'is-transparent' : ''}`}>
+              {modalProduct.image && <img src={modalProduct.image} alt={modalProduct.name} />}
+            </div>
+            <div className="delivery-modal-summary">
+              <span>Direto da brasa</span>
+              <h3>{modalProduct.name}</h3>
+              <p>{textoDescricaoItemPedir(modalProduct)}</p>
+              <strong>{formatPrice(modalUnitWithAddons)}</strong>
+            </div>
 
             {isPratoFeitoItem(modalProduct) && (
               <div className="mt-4">
