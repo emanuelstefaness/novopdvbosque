@@ -146,13 +146,20 @@ function resolvePedirItemImages(itemName, apiBase) {
   return { image: api || null, imageFallback: null }
 }
 
+function productVisualKind(itemName) {
+  const name = normalize(itemName)
+  if (name.includes('churraspao') || name.includes('x-bosque') || name.includes('x bosque')) return 'sandwich'
+  if (name.includes('entrevero') || name.includes('prato feito') || name.includes('salada do bosque')) return 'dish'
+  return 'skewer'
+}
+
 function ProductCard({ item, badges = [], onOpen }) {
   const [failedImages,setFailedImages]=useState([])
   const imgSrc=[item.image,item.imageFallback].find(src=>src&&!failedImages.includes(src))||null
   const onImgError=()=>setFailedImages(prev=>[...prev,imgSrc])
 
   return (
-    <article className={`delivery-product-card ${item.transparent ? 'has-transparent-image' : ''}`}>
+    <article className={`delivery-product-card ${item.transparent ? `has-transparent-image image-${productVisualKind(item.name)}` : ''}`}>
       <button type="button" onClick={() => onOpen(item)} className="delivery-product-hit" aria-label={`Abrir ${item.name}, ${formatPrice(item.price)}`}>
         <div className="delivery-product-image">
           {imgSrc ? (
@@ -326,6 +333,11 @@ export default function PedirOnline() {
     const rest = filteredCategories.filter((c) => !fixed.find((x) => x.id === c.id) && !BEBIDAS_SLUGS.includes(c.slug)).sort(bySort)
     return [...fixed, ...rest, ...bebidas]
   }, [menu.categories, categoriesBySlug])
+
+  const arcCategories = useMemo(() => {
+    const middle = Math.ceil(orderedCategories.length / 2)
+    return [...orderedCategories.slice(0, middle), null, ...orderedCategories.slice(middle)]
+  }, [orderedCategories])
 
   const espetinhosOnline = useMemo(() => {
     const espetinhosCat = (menu.categories || []).find((c) => c.slug === 'espetinhos')
@@ -723,17 +735,19 @@ export default function PedirOnline() {
           <p className="delivery-free">Entrega grátis hoje</p>
         )}
         {step === 'menu' && (
-          <nav className="delivery-category-arc no-scrollbar" aria-label="Categorias do cardápio">
-            <button type="button" className={activeCatId === 'all' ? 'is-active' : ''} onClick={() => setActiveCatId('all')}>
-              <span><Icon name="grid" size={19} /></span><b>Todos</b>
-            </button>
-            {orderedCategories.map((c) => {
-              const representative = (itemsByCategory.get(c.id) || []).find((item) => item.image)
-              return <button type="button" key={c.id} className={activeCatId === c.id ? 'is-active' : ''} onClick={() => setActiveCatId(c.id)}>
-                <span><Icon name="book" size={19} />{representative && <img src={representative.image} alt="" onError={(event) => event.currentTarget.remove()} />}</span>
-                <b>{c.name}</b>
-              </button>
-            })}
+          <nav className="delivery-category-arc" aria-label="Categorias do cardápio">
+            <div className="delivery-category-orbit">
+              {arcCategories.map((c, index) => {
+                if (!c) return <button type="button" key="all" className={`category-all ${activeCatId === 'all' ? 'is-active' : ''}`} onClick={() => setActiveCatId('all')}>
+                  <span><Icon name="grid" size={20} /></span><b>Todos</b>
+                </button>
+                const representative = (itemsByCategory.get(c.id) || []).find((item) => item.transparent)
+                return <button type="button" key={c.id} className={activeCatId === c.id ? 'is-active' : ''} style={{ '--arc-slot': index }} onClick={() => setActiveCatId(c.id)}>
+                  <span><Icon name="book" size={19} />{representative && <img src={representative.image} alt="" onError={(event) => event.currentTarget.remove()} />}</span>
+                  <b>{c.name}</b>
+                </button>
+              })}
+            </div>
           </nav>
         )}
       </div>
@@ -973,7 +987,7 @@ export default function PedirOnline() {
         >
           <div className="delivery-product-modal w-full max-w-md rounded-t-3xl bg-white p-5 shadow-float sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="delivery-modal-close" aria-label="Fechar detalhes" onClick={() => setModalProduct(null)}>×</button>
-            <div className={`delivery-modal-hero ${modalProduct.transparent ? 'is-transparent' : ''}`}>
+            <div className={`delivery-modal-hero ${modalProduct.transparent ? `is-transparent image-${productVisualKind(modalProduct.name)}` : ''}`}>
               {modalProduct.image && <img src={modalProduct.image} alt={modalProduct.name} />}
             </div>
             <div className="delivery-modal-summary">
