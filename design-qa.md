@@ -42,6 +42,9 @@
 2. Earlier P1: selected product stayed centered with copy below. Fix: rebuilt the hero with copy at upper-left and a larger, right-aligned skewer clipped at the top/right.
 3. Earlier P2: category thumbnails overflowed and collided with labels. Fix: clipped them inside 47 px circular controls and adjusted their crop.
 4. Post-fix evidence: `qa-home-comparison.png` and `qa-detail-comparison.png` show no remaining actionable P0, P1, or P2 mismatch.
+5. User review P1: card imagery crossed behind product names and the detail crop exposed too little of the skewer. Fix: reserved a clean image stage above card copy, moved the skewer beyond the card's top edge, and enlarged/repositioned the detail asset to expose substantially more of the product.
+6. User review P2: “Com fome?” used a different typographic voice from the section heading. Fix: applied the same Fraunces display face, weight, color, and tight tracking used by “Espetinhos”.
+7. Post-review evidence: refreshed home and detail captures confirm clean copy separation, deliberate card breakout, larger detail crop, and matching display typography.
 
 **Primary interactions tested**
 - Category filtering.
@@ -60,4 +63,3 @@
 - P3: add the remaining menu categories after their matching transparent product assets are generated.
 
 final result: passed
-

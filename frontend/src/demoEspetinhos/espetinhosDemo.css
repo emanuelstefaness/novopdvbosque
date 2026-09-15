@@ -43,11 +43,15 @@
   padding: 22px 20px 10px;
 }
 .skewer-home-title {
-  font-size: 25px;
+  font-size: 24px;
   line-height: 1;
   letter-spacing: -0.055em;
 }
-.skewer-home-title strong { font-weight: 700; }
+.skewer-home-title strong {
+  color: var(--forest);
+  font: 700 28px/.9 "Fraunces", Georgia, serif;
+  letter-spacing: -.045em;
+}
 .skewer-home-title span { color: #a8aaa8; font-weight: 500; }
 .skewer-search {
   height: 46px;
@@ -203,18 +207,20 @@
 .skewer-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  column-gap: 12px;
+  row-gap: 56px;
+  padding-top: 37px;
 }
 .skewer-product {
   position: relative;
-  min-height: 249px;
-  padding: 0 12px 13px;
+  min-height: 259px;
+  padding: 0 13px 14px;
   border: 1px solid #e6e5dd;
   border-radius: 18px;
   background: #fff;
   text-align: left;
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
   animation: cardEnter 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
   animation-delay: var(--card-delay);
   box-shadow: 0 8px 20px #24382f0b;
@@ -227,7 +233,7 @@
   box-shadow: 0 14px 28px #24382f17;
 }
 .skewer-image-space {
-  height: 142px;
+  height: 146px;
   display: grid;
   place-items: center;
   position: relative;
@@ -236,19 +242,21 @@
   position: absolute;
   width: 90px;
   height: 21px;
-  bottom: 13px;
+  bottom: 5px;
   background: #47270f24;
   filter: blur(9px);
   border-radius: 50%;
 }
 .skewer-product img {
-  position: relative;
+  position: absolute;
   z-index: 1;
-  width: 170%;
+  top: -84px;
+  left: 50%;
+  width: 184%;
   max-width: none;
-  height: 165px;
+  height: 205px;
   object-fit: contain;
-  transform: rotate(-7deg);
+  transform: translateX(-50%) rotate(-7deg);
   filter: drop-shadow(0 13px 11px #4b2e172c);
 }
 .skewer-product-copy {
@@ -259,7 +267,7 @@
 .skewer-product-copy strong {
   display: block;
   font:
-    700 14px/1.12 "DM Sans", sans-serif;
+    700 15px/1.15 "DM Sans", sans-serif;
   color: var(--coal);
 }
 .skewer-product-copy small {
@@ -267,11 +275,11 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  height: 31px;
+  height: 34px;
   margin-top: 6px;
   color: var(--muted);
-  font-size: 10px;
-  line-height: 1.45;
+  font-size: 10.5px;
+  line-height: 1.5;
 }
 .skewer-product-copy b {
   display: block;
@@ -381,10 +389,10 @@
 .skewer-detail-visual img {
   position: absolute;
   z-index: 2;
-  right: -148px;
-  top: -5px;
-  width: 455px;
-  height: 390px;
+  right: -82px;
+  top: -46px;
+  width: 590px;
+  height: 470px;
   max-width: none;
   object-fit: contain;
   transform: rotate(-13deg);
