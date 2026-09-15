@@ -250,11 +250,11 @@
 .skewer-product img {
   position: absolute;
   z-index: 1;
-  top: -84px;
+  top: -52px;
   left: 50%;
-  width: 184%;
+  width: 148%;
   max-width: none;
-  height: 205px;
+  height: 170px;
   object-fit: contain;
   transform: translateX(-50%) rotate(-7deg);
   filter: drop-shadow(0 13px 11px #4b2e172c);

@@ -45,6 +45,7 @@
 5. User review P1: card imagery crossed behind product names and the detail crop exposed too little of the skewer. Fix: reserved a clean image stage above card copy, moved the skewer beyond the card's top edge, and enlarged/repositioned the detail asset to expose substantially more of the product.
 6. User review P2: “Com fome?” used a different typographic voice from the section heading. Fix: applied the same Fraunces display face, weight, color, and tight tracking used by “Espetinhos”.
 7. Post-review evidence: refreshed home and detail captures confirm clean copy separation, deliberate card breakout, larger detail crop, and matching display typography.
+8. User review P2: card images extended too far beyond their bounds. Fix: reduced card image width and height and limited the breakout to 52 px, preserving the floating effect without invading the category heading.
 
 **Primary interactions tested**
 - Category filtering.
