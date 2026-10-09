@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import './operations.css';
+import './public-light.css';
 import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import {useWaiter} from "./context/useWaiter";
 const Home = lazy(() => import("./pages/Home"));

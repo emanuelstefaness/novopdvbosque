@@ -16,8 +16,8 @@ export default function TvChurrasqueira() {
   useSocket(() => load())
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
-      <h1 className="mb-6 text-center text-3xl font-bold text-amber-600 md:text-4xl">TV CHURRASQUEIRA — BOSQUE DA CARNE</h1>
+    <div className="min-h-screen bg-[#242a30] p-6">
+      <h1 className="mb-6 text-center text-3xl font-bold text-[#e37a01] md:text-4xl">TV CHURRASQUEIRA — BOSQUE DA CARNE</h1>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {list.map((p) => {
           const tvB = pedidoOnlineTvBannerModel(p.comanda_tipo_online)
@@ -30,27 +30,27 @@ export default function TvChurrasqueira() {
                 <p className={tvB.subtitleClass}>{tvB.subtitle}</p>
               </div>
             )}
-            <div className="mb-2 flex flex-wrap items-center gap-2 font-bold text-2xl text-amber-600">
+            <div className="mb-2 flex flex-wrap items-center gap-2 font-bold text-2xl text-[#e37a01]">
               <span>Comanda {p.comanda_id} — Mesa {p.mesa}</span>
               {isTipoPedidoOnline(p.comanda_tipo_online) && (
-                <span className="rounded-full bg-violet-200 px-3 py-1 text-base font-black uppercase text-violet-900">Pedir online</span>
+                <span className="rounded-full bg-[#2b2839] px-3 py-1 text-base font-black uppercase text-[#5b1fb7]">Pedir online</span>
               )}
               {comandaOnlineLabel(p.comanda_tipo_online) && (
-                <span className="rounded-full bg-black/10 px-3 py-1 text-lg text-slate-800">{comandaOnlineLabel(p.comanda_tipo_online)}</span>
+                <span className="rounded-full bg-black/10 px-3 py-1 text-lg text-[#c5cedc]">{comandaOnlineLabel(p.comanda_tipo_online)}</span>
               )}
             </div>
-            <p className="text-slate-700">{p.quantity}x {p.item_name}</p>
+            <p className="text-[#bbc6d6]">{p.quantity}x {p.item_name}</p>
             {obsTv && (
-              <p className="mt-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-lg font-semibold text-violet-800">
+              <p className="mt-2 rounded-lg border border-[#2b2839] bg-[#23202e] px-3 py-2 text-lg font-semibold text-[#5e1fc2]">
                 {obsTv}
               </p>
             )}
-            {p.meat_point && <p className="mt-2 text-lg font-semibold text-green-600">Ponto: {p.meat_point}</p>}
+            {p.meat_point && <p className="mt-2 text-lg font-semibold text-[#16c355]">Ponto: {p.meat_point}</p>}
           </div>
           );
         })}
       </div>
-      {list.length === 0 && <p className="text-center text-2xl text-slate-500">Nenhum pedido no momento</p>}
+      {list.length === 0 && <p className="text-center text-2xl text-[#8f9db2]">Nenhum pedido no momento</p>}
     </div>
   )
 }

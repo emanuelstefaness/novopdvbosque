@@ -7,7 +7,7 @@ let socket = null;
 export function getSocket() {
   if (!socket) {
     const url = getApiBase();
-    let token;try{token=JSON.parse(localStorage.getItem('pdv_bosque_waiter'))?.token}catch{token=undefined}
+    let token;try{token=JSON.parse(sessionStorage.getItem('pdv_bosque_waiter')||localStorage.getItem('pdv_bosque_waiter'))?.token}catch{token=undefined}
     socket = io(url || undefined, { path: '/socket.io', transports: ['websocket', 'polling'],auth:{token},autoConnect:!!token });
   }
   return socket;

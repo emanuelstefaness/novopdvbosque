@@ -1,9 +1,10 @@
+import '../production.css'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { getPedidosGrill, getProductionGrill, markPedidoChurrasqueiraReady } from '../api'
 import { useSocket } from '../socket'
 import PedidoElapsed from '../components/PedidoElapsed'
 import {earliestCreatedAt} from '../utils/pedidoTime'
-import { churrasqueiraComandaColumnClass, comandaOnlineLabel, isTipoPedidoOnline, pedidoOnlineBannerModel } from '../utils/comandaOnlineVisual'
+import { comandaOnlineLabel, isTipoPedidoOnline } from '../utils/comandaOnlineVisual'
 import { observacaoParaProducao } from '../utils/productionObservations'
 import { textoResumoAddonsPedido } from '../utils/lancheAddons'
 
@@ -39,6 +40,11 @@ function groupItemsByProduct(items) {
     map[label].pedidos.push(p)
   })
   return Object.values(map)
+}
+
+/** Nomes (sem repetir) de quem lançou os pedidos do grupo. */
+function lancadoPor(pedidos) {
+  return [...new Set((pedidos || []).map((p) => p.launched_by).filter(Boolean))].join(', ')
 }
 
 function formatByPoint(byPoint) {
@@ -168,175 +174,129 @@ export default function Churrasqueira() {
   const productionGrouped = useMemo(() => groupProductionByItem(production.byItem), [production.byItem])
 
   return (
-    <div className="relative flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-gradient-to-br from-stone-200 via-amber-100/90 to-amber-50">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-1 transition-[padding] sm:px-2" style={{ paddingRight: totalMinimized ? 0 : '13rem' }}>
-        <div className="mb-3 flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 px-1">
-          <h1 className="text-xl font-bold text-amber-900/90">Churrasqueira</h1>
-      <p className="production-subtitle">Pedidos organizados por comanda e prioridade de preparo.</p>
-          <span
-            className="rounded-full border border-amber-300/80 bg-amber-100/90 px-2.5 py-0.5 text-sm font-semibold text-amber-950 shadow-sm tabular-nums"
-            title="Total de cards de comanda na fila"
-          >
+    <div className="prod-page">
+      <div className="prod-main">
+        <div className="prod-head">
+          <h1 className="prod-title">Churrasqueira</h1>
+          <p className="prod-sub">Pedidos organizados por comanda e prioridade de preparo.</p>
+          <span className="prod-count" title="Total de cards de comanda na fila">
             {cards.length} {cards.length === 1 ? 'comanda na fila' : 'comandas na fila'}
           </span>
+          {totalMinimized && (
+            <button type="button" onClick={() => setTotalMinimized(false)} className="prod-btn is-ghost prod-toggle" title="Abrir total para produção">
+              Total produção
+            </button>
+          )}
         </div>
-        {error&&<p className="error-banner" role="alert">{error}</p>}
-        <div className="flex min-h-0 flex-1 flex-row gap-4 overflow-x-auto overflow-y-auto pb-3">
-        {cards.map((card) => {
-          const tipoOn = card.items[0]?.comanda_tipo_online
-          const colBanner = pedidoOnlineBannerModel(tipoOn)
-          return (
-          <div
-            key={card.comanda_id}
-            role="region"
-            aria-label={`Produção da comanda ${card.comanda_id}`}
-            className={churrasqueiraComandaColumnClass(tipoOn)}
-          >
-            {colBanner && (
-              <div className={colBanner.wrap}>
-                <p className={colBanner.titleClass}>{colBanner.title}</p>
-                <p className={colBanner.subtitleClass}>{colBanner.subtitle}</p>
-              </div>
-            )}
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <span className={`text-base font-bold ${tipoOn === 'delivery' ? 'text-sky-800' : tipoOn === 'retirada' ? 'text-teal-900' : 'text-amber-700'}`}>
-                  Comanda {card.items[0]?.production_number || card.comanda_id}{card.items[0]?.production_number ? " (paga)" : ""} — Mesa {card.mesa}
-                </span>
-                {isTipoPedidoOnline(tipoOn) && (
-                  <span className="ml-2 inline-block rounded-full bg-violet-200/90 px-2 py-0.5 text-[10px] font-black uppercase text-violet-900">
-                    Pedir online
-                  </span>
-                )}
-                {comandaOnlineLabel(tipoOn) && (
-                  <span className="ml-2 inline-block rounded-full bg-black/10 px-2 py-0.5 text-[11px] font-bold text-slate-800">
-                    {comandaOnlineLabel(tipoOn)}
-                  </span>
-                )}
-                {card.items[0]?.waiter_name && <span className="ml-2 text-slate-500 text-xs">Garçom: {card.items[0].waiter_name}</span>}
-                <div className="mt-0.5" title="Tempo desde o pedido mais antigo desta comanda na fila">
-                  <PedidoElapsed createdAt={earliestCreatedAt(card.items)} className="text-xs" />
-                </div>
-              </div>
-              <button
-                type="button"
-                className="rounded-lg bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-green-500"
-                disabled={busy}
-                onClick={() => setCardAllReady(card.items)}
+        {error && <p className="error-banner" role="alert">{error}</p>}
+        <div className="prod-board">
+          {cards.map((card) => {
+            const tipoOn = card.items[0]?.comanda_tipo_online
+            const modo = tipoOn === 'delivery' ? 'is-delivery' : tipoOn === 'retirada' ? 'is-retirada' : ''
+            const numero = card.items[0]?.production_number || card.comanda_id
+            return (
+              <section
+                key={card.comanda_id}
+                aria-label={`Produção da comanda ${card.comanda_id}`}
+                className={`prod-card ${modo}`}
               >
-                Tudo pronto
-              </button>
-            </div>
-            <ul className="space-y-2">
-              {groupItemsByProduct(card.items).map((g) => (
-                <li key={g.label} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/70 bg-amber-50/90 px-2.5 py-2 shadow-sm">
-                  <span className="min-w-0 flex-1 text-sm">
-                    <span className="font-semibold text-slate-800">{g.total}</span>{' '}
-                    <span className="text-slate-800">{g.displayBase}</span>
-                    {g.pedidos.some((x) => Number(x.is_side)) && (
-                      <span className="ml-1.5 inline-block rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-sky-900">Cozinha</span>
-                    )}
-                    <span className="ml-1 text-amber-600 text-xs">{formatByPoint(g.byPoint)}</span>
-                    {g.observation && (
-                      <p className="mt-1 rounded-md border border-violet-200/80 bg-violet-50 px-2 py-1 text-xs font-semibold leading-snug text-violet-800">
-                        {g.observation}
-                      </p>
-                    )}
-                    <span className="mt-0.5 block">
-                      <PedidoElapsed createdAt={earliestCreatedAt(g.pedidos)} className="text-xs" />
-                    </span>
-                  </span>
-                  <div className="flex shrink-0 items-center gap-1">
-                    {g.total > 1 && (
-                      <button
-                        type="button"
-                        className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-300 text-sm font-bold text-slate-800 hover:bg-slate-400"
-                        onClick={() => markOneReady(g.pedidos)}
-                        title="Dar pronto em 1 unidade"
-                        aria-label={`Dar pronto em 1 unidade de ${g.displayBase}`}
-                        disabled={busy}
-                      >
-                        −
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-500"
-                      disabled={busy}
-                      onClick={() => setCardAllReady(g.pedidos)}
-                    >
-                      {g.total>1?'Todos prontos':'Pronto'}
-                    </button>
+                <div className="prod-card-head">
+                  <div>
+                    <h2 className="prod-card-title">
+                      Comanda {numero}{card.items[0]?.production_number ? ' (paga)' : ''} — Mesa {card.mesa}
+                    </h2>
+                    <div className="prod-card-meta">
+                      {isTipoPedidoOnline(tipoOn) && <span className={`prod-chip ${modo}`}>{comandaOnlineLabel(tipoOn)}</span>}
+                      {card.items[0]?.waiter_name && <span>Garçom: {card.items[0].waiter_name}</span>}
+                      <span title="Tempo desde o pedido mais antigo desta comanda na fila">
+                        <PedidoElapsed createdAt={earliestCreatedAt(card.items)} className="text-xs" />
+                      </span>
+                    </div>
                   </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-          );
-        })}
+                  <button type="button" className="prod-btn" disabled={busy} onClick={() => setCardAllReady(card.items)}>
+                    Tudo pronto
+                  </button>
+                </div>
+                <ul className="prod-items">
+                  {groupItemsByProduct(card.items).map((g) => (
+                    <li key={g.label} className="prod-item">
+                      <span className="prod-qty">{g.total}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="prod-item-name">
+                          {g.displayBase}
+                          {g.pedidos.some((x) => Number(x.is_side)) && <span className="prod-chip" style={{ marginLeft: 6 }}>Cozinha</span>}
+                        </div>
+                        {formatByPoint(g.byPoint) && <div className="prod-item-sub">{formatByPoint(g.byPoint).trim().replace(/^\(|\)$/g, '')}</div>}
+                        {g.observation && <div className="prod-item-note">{g.observation}</div>}
+                        <div className="prod-item-time">
+                          <PedidoElapsed createdAt={earliestCreatedAt(g.pedidos)} className="text-xs" />
+                          {lancadoPor(g.pedidos) && <span className="prod-by"> · por {lancadoPor(g.pedidos)}</span>}
+                        </div>
+                      </div>
+                      <div className="prod-actions">
+                        {g.total > 1 && (
+                          <button
+                            type="button"
+                            className="prod-btn is-ghost"
+                            onClick={() => markOneReady(g.pedidos)}
+                            title="Dar pronto em 1 unidade"
+                            aria-label={`Dar pronto em 1 unidade de ${g.displayBase}`}
+                            disabled={busy}
+                          >
+                            −1
+                          </button>
+                        )}
+                        <button type="button" className="prod-btn is-small" disabled={busy} onClick={() => setCardAllReady(g.pedidos)}>
+                          {g.total > 1 ? 'Todos' : 'Pronto'}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )
+          })}
         </div>
-        {cards.length === 0 && (
-          <p className="py-8 text-center text-slate-500">Nenhum pedido no momento.</p>
-        )}
+        {cards.length === 0 && <p className="prod-empty">Nenhum pedido no momento.</p>}
       </div>
-
-      {totalMinimized ? (
-        <button
-          type="button"
-          onClick={() => setTotalMinimized(false)}
-          className="fixed right-4 z-30 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-amber-600 shadow-lg hover:border-amber-400 hover:bg-slate-50"
-          title="Abrir total para produção"
-          style={{ top: '4.5rem' }}
-        >
-          Total produção
-        </button>
-      ) : (
-        <div
-          className="fixed right-0 top-16 z-20 flex h-[calc(100vh-4rem)] w-52 flex-col border-l border-amber-200/80 bg-gradient-to-b from-stone-50 to-amber-50/95 shadow-xl"
-        >
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200 px-3 py-2">
-            <h2 className="text-sm font-semibold text-amber-600">Total para produção</h2>
-            <button
-              type="button"
-              onClick={() => setTotalMinimized(true)}
-              className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-              title="Minimizar"
-            >
-              <span className="text-lg leading-none">×</span>
+      {!totalMinimized && (
+        <aside className="prod-side" aria-label="Total para produção">
+          <div className="prod-side-head">
+            <h2>Total para produção</h2>
+            <button type="button" className="prod-close" onClick={() => setTotalMinimized(true)} title="Fechar" aria-label="Fechar total para produção">
+              ×
             </button>
           </div>
-          <div className="flex-1 space-y-1 overflow-auto p-2 text-xs">
+          <div className="prod-side-body">
             {productionGrouped.map((g) => (
-              <div key={g.name} className="rounded-lg bg-slate-100 px-2 py-1.5">
-                <span className="font-medium text-slate-800">{g.total} {g.name}</span>
-                {Object.keys(g.byPoint || {}).length > 0 && (
-                  <span className="text-amber-600">{formatByPoint(g.byPoint)}</span>
-                )}
+              <div key={g.name} className="prod-total-row">
+                <b>{g.total}</b>
+                <span>
+                  {g.name}
+                  {formatByPoint(g.byPoint) && <small>{formatByPoint(g.byPoint).trim().replace(/^\(|\)$/g, '')}</small>}
+                </span>
               </div>
             ))}
             {production.pratoFeito &&
               typeof production.pratoFeito === 'object' &&
               !Array.isArray(production.pratoFeito) &&
               production.pratoFeito.pratos > 0 && (
-                <div className="mt-3 border-t-2 border-amber-400/70 pt-2">
-                  <div className="rounded-lg bg-amber-100 px-2 py-2">
-                    <span className="font-semibold text-amber-900">
-                      {production.pratoFeito.pratos} Prato Feito /{' '}
-                      {production.pratoFeito.espetinhos === 1
-                        ? '1 espetinho'
-                        : `${production.pratoFeito.espetinhos} espetinhos`}
+                <div className="prod-total-pf">
+                  <div className="prod-total-row">
+                    <b>{production.pratoFeito.pratos}</b>
+                    <span>
+                      Prato Feito
+                      <small>
+                        {production.pratoFeito.espetinhos === 1 ? '1 espetinho' : `${production.pratoFeito.espetinhos} espetinhos`}
+                      </small>
                     </span>
                   </div>
                 </div>
               )}
-            {productionGrouped.length === 0 && !production.pratoFeito && (
-              <p className="p-2 text-slate-500">Nenhum pedido</p>
-            )}
+            {productionGrouped.length === 0 && !production.pratoFeito && <p className="prod-empty">Nenhum pedido</p>}
           </div>
-        </div>
+        </aside>
       )}
     </div>
   )
 }
-
-

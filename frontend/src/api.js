@@ -6,14 +6,35 @@ export async function cashOperation(path,body) {
  const data=await r.json();if(!r.ok)throw Error(data.error||'Não foi possível concluir.');return data;
 }
 export async function apiFetch(url,options={}) {
-  let token;try{token=JSON.parse(localStorage.getItem('pdv_bosque_waiter'))?.token}catch{token=undefined}
-  const r=await fetch(url,{...options,headers:{...options.headers,...(token?{Authorization:'Bearer '+token}:{})}});
+  let token;try{token=JSON.parse(sessionStorage.getItem('pdv_bosque_waiter')||localStorage.getItem('pdv_bosque_waiter'))?.token}catch{token=undefined}
+  // Tempo limite: sem isso, uma rede ruim deixa a tela esperando para sempre.
+  const signal=options.signal||AbortSignal.timeout(30000);
+  let r;
+  try{r=await fetch(url,{...options,signal,headers:{...options.headers,...(token?{Authorization:'Bearer '+token}:{})}})}
+  catch(e){
+    if(e?.name==='TimeoutError'||e?.name==='AbortError')throw new Error('O servidor demorou para responder. Confira se a ação foi registrada antes de tentar de novo.');
+    throw new Error('Sem conexão com o servidor do PDV. Verifique o Wi-Fi e se o computador do caixa está ligado.');
+  }
   if(r.status===401)window.dispatchEvent(new Event('pdv-session-expired'));
   return r;
 }
-export async function loginOperator(role,password) {
- const r=await fetch(API+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role,password})});
+export async function getOnlineStatus() {
+  const r=await apiFetch(`${API}/api/online/status`);
+  const d=await r.json();if(!r.ok)throw new Error(d.error||'Falha ao consultar pedidos online');return d;
+}
+export async function setOnlineMode(modo) {
+  const r=await apiFetch(`${API}/api/online/status`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({modo})});
+  const d=await r.json();if(!r.ok)throw new Error(d.error||'Não foi possível alterar os pedidos online');return d;
+}
+export async function loginOperator(role,password,name) {
+ const r=await fetch(API+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role,password,name})});
  const d=await r.json();if(!r.ok)throw new Error(d.error||'Falha ao entrar');return d;
+}
+
+export async function getWaiters() {
+  const r = await apiFetch(`${API}/api/waiters`);
+  if (!r.ok) throw new Error('Falha ao carregar garçons');
+  return r.json();
 }
 
 export async function getWaiterByName(name) {

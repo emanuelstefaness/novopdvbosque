@@ -2,6 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 process.env.PDV_CAIXA_PASSWORD = "senha-somente-teste";
+// Banco em memória: o login do garçom grava em "waiters" e não pode tocar no banco real.
+process.env.PDV_DB_PATH = ":memory:";
+const { initDb } = await import("./db.js");
+initDb();
 const { authRouter, authorize, sessionFor } = await import("./auth.js");
 const app = express();
 app.use(express.json());
@@ -50,9 +54,27 @@ test("Caixa acessa gestão e logout invalida a sessão no servidor", async () =>
     401,
   );
 });
+test("Garçom precisa informar o nome para entrar", async () => {
+  assert.equal(
+    (await request("/auth/login", "POST", { role: "garcom" })).status,
+    400,
+  );
+  assert.equal(
+    (await request("/auth/login", "POST", { role: "garcom", name: " " })).status,
+    400,
+  );
+  const ok = await request("/auth/login", "POST", {
+    role: "garcom",
+    name: "  Maria   Silva ",
+  });
+  assert.equal(ok.status, 200);
+  const data = await ok.json();
+  assert.equal(data.name, "Maria Silva");
+  assert.ok(data.token);
+});
 test("Garçom mantém atendimento e não recebe permissões de caixa", async () => {
   const { token } = await (
-    await request("/auth/login", "POST", { role: "garcom" })
+    await request("/auth/login", "POST", { role: "garcom", name: "Teste Garçom" })
   ).json();
   assert.equal((await request("/comandas", "GET", null, token)).status, 200);
   assert.equal(

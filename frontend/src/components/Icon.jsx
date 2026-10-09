@@ -27,6 +27,9 @@ const paths = {
   bell: "M5 17h14l-2-3V9a5 5 0 0 0-10 0v5l-2 3z M10 21h4",
   download: "M12 3v12 M7 10l5 5 5-5 M4 16v5h16v-5",
   pin: "M19 9c0 5-7 12-7 12S5 14 5 9a7 7 0 0 1 14 0z M14 9a2 2 0 1 1-4 0 2 2 0 0 1 4 0",
+  trash: "M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v6 M14 11v6",
+  card: "M3 6h18v12H3z M3 10h18 M6 15h4",
+  bolt: "M13 3 4 14h6l-1 7 9-11h-6l1-7z",
 };
 export default function Icon({ name, size = 20, ...props }) {
   return (

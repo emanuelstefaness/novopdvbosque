@@ -22,6 +22,7 @@ export default function Garcons() {
     [search, setSearch] = useState(""),
     [modal, setModal] = useState(null),
     [mesa, setMesa] = useState(""),
+    [numero, setNumero] = useState(""),
     [saving, setSaving] = useState(false);
   const load = async () => {
     try {
@@ -53,10 +54,20 @@ export default function Garcons() {
   const submit = async (e) => {
     e.preventDefault();
     if (!mesa.trim() || saving) return;
+    // "Abrir comanda" pelo botão: o garçom escolhe o número (não segue ordem)
+    const id = modal.picking ? Number(numero) : modal.id;
+    if (!Number.isInteger(id) || id < 1 || id > 200) {
+      setError("Informe um número de comanda de 1 a 200.");
+      return;
+    }
+    if (open(data[id])) {
+      setError(`A comanda ${id} já está em atendimento (Mesa ${data[id].mesa}). Escolha outra.`);
+      return;
+    }
     setSaving(true);
     try {
-      await openComanda(modal.id, mesa.trim(), waiter?.id ?? null);
-      navigate(`/garcons/${modal.id}/pedidos`);
+      await openComanda(id, mesa.trim(), waiter?.id ?? null);
+      navigate(`/garcons/${id}/pedidos`);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -81,8 +92,10 @@ export default function Garcons() {
         <button
           className="btn btn-primary"
           onClick={() => {
-            const c = all.find((c) => !open(c));
-            if (c) choose(c);
+            setMesa("");
+            setNumero("");
+            setError("");
+            setModal({ id: null, picking: true });
           }}
           disabled={active.length === 200}
         >
@@ -192,7 +205,7 @@ export default function Garcons() {
         <div className="dialog-backdrop">
           <form className="dialog-card" onSubmit={submit}>
             <div className="dialog-title">
-              <h2>Abrir comanda {modal.id}</h2>
+              <h2>{modal.picking ? "Abrir comanda" : `Abrir comanda ${modal.id}`}</h2>
               <button
                 type="button"
                 className="icon-button"
@@ -202,11 +215,31 @@ export default function Garcons() {
                 <Icon name="close" />
               </button>
             </div>
-            <p>Informe a mesa deste atendimento.</p>
+            <p>
+              {modal.picking
+                ? "Escolha o número da comanda e informe a mesa."
+                : "Informe a mesa deste atendimento."}
+            </p>
+            {modal.picking && (
+              <label className="field-label">
+                Número da comanda
+                <input
+                  autoFocus
+                  required
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={200}
+                  value={numero}
+                  onChange={(e) => setNumero(e.target.value)}
+                  placeholder="1 a 200"
+                />
+              </label>
+            )}
             <label className="field-label">
               Número da mesa
               <input
-                autoFocus
+                autoFocus={!modal.picking}
                 required
                 value={mesa}
                 onChange={(e) => setMesa(e.target.value)}

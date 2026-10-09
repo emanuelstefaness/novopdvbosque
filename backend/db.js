@@ -257,7 +257,9 @@ export function initDb() {
     'endereco_numero TEXT',
     'endereco_complemento TEXT',
     'endereco_bairro TEXT',
-    'endereco_referencia TEXT'
+    'endereco_referencia TEXT',
+    'observation TEXT',
+    'locked INTEGER DEFAULT 0'
   ];
   for (const col of cols) {
     const name = col.split(' ')[0];
@@ -268,7 +270,15 @@ export function initDb() {
     }
   }
 
-  const pedidoAddonCols = ['extra_caramelized_onion INTEGER DEFAULT 0', 'extra_hamburger INTEGER DEFAULT 0'];
+  // Configurações simples do sistema (ex.: abrir/fechar pedidos online manualmente).
+  db.exec(`CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+  )`);
+
+  // Quem lançou o item (nome informado no acesso do garçom). Usado nas telas de produção e na comanda.
+  const pedidoAddonCols = ['extra_caramelized_onion INTEGER DEFAULT 0', 'extra_hamburger INTEGER DEFAULT 0', 'launched_by TEXT'];
   for (const col of pedidoAddonCols) {
     try {
       db.exec(`ALTER TABLE pedidos ADD COLUMN ${col}`);

@@ -12,6 +12,8 @@ import {
   paySelection,
   clearComanda,
   openComanda,
+  updatePedido,
+  deletePedido,
 } from "../api";
 import { useSocket } from "../socket";
 import {
@@ -22,6 +24,7 @@ import { textoResumoAddonsPedido } from "../utils/lancheAddons";
 import CaixaQuickAdd from "../components/CaixaQuickAdd";
 import CashPayment from "../components/CashPayment";
 import CashShift from "../components/CashShift";
+import ItemActionsMenu from "../components/ItemActionsMenu";
 import {
   startCaixaOnlineOrderAlarm,
   stopCaixaOnlineOrderAlarm,
@@ -77,6 +80,17 @@ export default function Caixa() {
   const [cobrancaSeparadaIds, setCobrancaSeparadaIds] = useState([]);
   const [cobrancaSeparadaLoading, setCobrancaSeparadaLoading] = useState(false);
   const [clearComandaLoading, setClearComandaLoading] = useState(false);
+  const [itemSearch, setItemSearch] = useState("");
+  const [exibicaoCompleta, setExibicaoCompleta] = useState(true);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [editGroupModal, setEditGroupModal] = useState(null);
+  const [obsDraft, setObsDraft] = useState("");
+  const cpfInputRef = useRef(null);
+  useEffect(() => {
+    setObsDraft(summary?.comanda?.observation || "");
+    setQuickAddOpen(false);
+    setItemSearch("");
+  }, [summary?.comanda?.id]);
   const loadTimeoutRef = useRef(null);
   /** Fila de avisos de pedido online (socket `novo-pedido-online`). */
   const [onlineOrderQueue, setOnlineOrderQueue] = useState([]);
@@ -244,6 +258,89 @@ export default function Caixa() {
     }
   };
 
+  const saveObservation = async () => {
+    if (!summary) return;
+    if (obsDraft === (summary.comanda.observation || "")) return;
+    try {
+      await updateComanda(summary.comanda.id, { observation: obsDraft });
+      await refreshSummary();
+    } catch (e) {
+      setCaixaError(e.message || "Erro ao salvar observação");
+    }
+  };
+
+  const toggleLocked = async () => {
+    if (!summary) return;
+    try {
+      await updateComanda(summary.comanda.id, { locked: summary.comanda.locked ? 0 : 1 });
+      await refreshSummary();
+    } catch (e) {
+      setCaixaError(e.message || "Erro ao bloquear pedido");
+    }
+  };
+
+  const incrementGroup = async (g) => {
+    const row = g.rows[0];
+    try {
+      await updatePedido(row.id, { quantity: row.quantity + 1 });
+      await refreshSummary();
+    } catch (e) {
+      setCaixaError(e.message || "Erro ao alterar item");
+    }
+  };
+
+  const decrementGroup = async (g) => {
+    const row = g.rows[g.rows.length - 1];
+    try {
+      if (row.quantity > 1) await updatePedido(row.id, { quantity: row.quantity - 1 });
+      else await deletePedido(row.id);
+      await refreshSummary();
+    } catch (e) {
+      setCaixaError(e.message || "Erro ao alterar item");
+    }
+  };
+
+  const deleteGroup = async (g) => {
+    if (!window.confirm(`Excluir ${g.item_name} do pedido?`)) return;
+    try {
+      await Promise.all(g.rows.map((r) => deletePedido(r.id)));
+      await refreshSummary();
+    } catch (e) {
+      setCaixaError(e.message || "Erro ao excluir item");
+    }
+  };
+
+  const openEditGroup = (g) => {
+    if (g.rows.length !== 1) return;
+    setEditGroupModal({
+      id: g.rows[0].id,
+      quantity: g.rows[0].quantity,
+      observations: g.rows[0].observations || "",
+    });
+  };
+
+  const saveEditGroup = async () => {
+    if (!editGroupModal) return;
+    try {
+      await updatePedido(editGroupModal.id, {
+        quantity: Math.max(1, parseInt(editGroupModal.quantity, 10) || 1),
+        observations: editGroupModal.observations.trim() || null,
+      });
+      setEditGroupModal(null);
+      await refreshSummary();
+    } catch (e) {
+      setCaixaError(e.message || "Erro ao editar item");
+    }
+  };
+
+  function formatIniciado(dt) {
+    if (!dt) return "";
+    const [datePart, timePart] = String(dt).split(" ");
+    if (!datePart) return dt;
+    const [, m, d] = datePart.split("-");
+    return `${d}-${m} às ${(timePart || "").slice(0, 5)}`;
+  }
+
   const toggleCobrancaPedido = (id) => {
     setCobrancaSeparadaIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
@@ -283,14 +380,22 @@ export default function Caixa() {
               observations: p.observations || "",
               extra_caramelized_onion: p.extra_caramelized_onion,
               extra_hamburger: p.extra_hamburger,
+              rows: [],
             };
           }
           m[k].quantity += p.quantity;
           m[k].lineTotal += p.quantity * p.unit_price;
+          m[k].rows.push(p);
         });
         return Object.values(m);
       })()
     : [];
+
+  const visiblePedidos = itemSearch.trim()
+    ? groupedPedidos.filter((g) =>
+        g.item_name.toLowerCase().includes(itemSearch.trim().toLowerCase()),
+      )
+    : groupedPedidos;
 
   const toggleAgruparOrigem = (id) => {
     const n = Number(id);
@@ -408,7 +513,7 @@ export default function Caixa() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center text-slate-600">
+      <div className="flex min-h-[40vh] items-center justify-center text-[#b5bfcf]">
         Carregando caixa…
       </div>
     );
@@ -426,32 +531,32 @@ export default function Caixa() {
             aria-modal="true"
             aria-labelledby="caixa-novo-pedido-titulo"
           >
-            <div className="cash-alert pointer-events-auto w-full max-w-lg rounded-2xl border-4 border-red-600 bg-white p-6 shadow-2xl ring-4 ring-amber-400/90 sm:p-8">
-              <p className="text-center text-xs font-black uppercase tracking-[0.25em] text-red-600">
+            <div className="cash-alert pointer-events-auto w-full max-w-lg rounded-2xl border-4 border-[#d11d1d] bg-[#212226] p-6 shadow-2xl ring-4 ring-[#f7b200]/90 sm:p-8">
+              <p className="text-center text-xs font-black uppercase tracking-[0.25em] text-[#d11d1d]">
                 Pedido online recebido
               </p>
               <h2
                 id="caixa-novo-pedido-titulo"
-                className="mt-2 text-center text-3xl font-black text-slate-900 sm:text-4xl"
+                className="mt-2 text-center text-3xl font-black text-[#ccd2e1] sm:text-4xl"
               >
                 #{onlineOrderAlert.orderId ?? "—"}
               </h2>
-              <p className="mt-3 text-center text-base text-slate-700">
+              <p className="mt-3 text-center text-base text-[#bbc6d6]">
                 <span className="font-semibold">
                   {onlineOrderAlert.cliente_nome || "Cliente"}
                 </span>
                 {onlineOrderAlert.cliente_telefone ? (
-                  <span className="mt-1 block text-sm text-slate-600">
+                  <span className="mt-1 block text-sm text-[#b5bfcf]">
                     Tel. {onlineOrderAlert.cliente_telefone}
                   </span>
                 ) : null}
               </p>
-              <p className="mt-2 text-center text-xl font-bold text-amber-700">
+              <p className="mt-2 text-center text-xl font-bold text-[#d45f05]">
                 {typeof onlineOrderAlert.valor_total === "number"
                   ? `Total R$ ${Number(onlineOrderAlert.valor_total).toFixed(2).replace(".", ",")}`
                   : ""}
               </p>
-              <p className="mt-2 text-center text-sm text-slate-500">
+              <p className="mt-2 text-center text-sm text-[#8f9db2]">
                 {String(onlineOrderAlert.tipo || "").toLowerCase() ===
                 "delivery"
                   ? "Delivery"
@@ -460,20 +565,20 @@ export default function Caixa() {
                   ? ` · Comanda #${onlineOrderAlert.comandaId}`
                   : ""}
               </p>
-              <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-950">
+              <p className="mt-4 rounded-lg border border-[#ffd117] bg-[#312e22] px-3 py-2 text-center text-xs font-semibold text-[#c84804]">
                 Um novo pedido chegou. Abra a central para conferir os detalhes.
               </p>
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
                 <button
                   type="button"
-                  className="rounded-xl bg-emerald-600 px-6 py-3.5 text-base font-black text-white shadow-lg hover:bg-emerald-500"
+                  className="rounded-xl bg-[#02cd8e] px-6 py-3.5 text-base font-black text-white shadow-lg hover:bg-[#0dd08f]"
                   onClick={() => dismissOnlineOrderAlert(true)}
                 >
                   Ver pedido
                 </button>
                 <button
                   type="button"
-                  className="rounded-xl border-2 border-slate-400 bg-white px-6 py-3.5 text-base font-black text-slate-800 hover:bg-slate-100"
+                  className="rounded-xl border-2 border-[#414c5a] bg-[#212226] px-6 py-3.5 text-base font-black text-[#c5cedc] hover:bg-[#242a30]"
                   onClick={() => dismissOnlineOrderAlert(false)}
                 >
                   Continuar no caixa
@@ -514,35 +619,126 @@ export default function Caixa() {
       </header>
       {feedback&&<p className="operation-feedback" role="status">{feedback}</p>}
       {search && !emAndamentoIds.some(id=>String(id).includes(search)||String(comandas[id]?.mesa||" ").includes(search)) && !livresIds.some(id=>String(id).includes(search)) && <p className="empty-panel">Nenhuma comanda encontrada. <button className="text-action" onClick={()=>setSearch("")}>Limpar busca</button></p>}
-      <div className="cash-grid-toolbar"><label className="register-search"><Icon name="search" size={17}/><input placeholder="Buscar mesa ou comanda · F2" aria-label="Buscar mesa ou comanda" value={search} onChange={e=>setSearch(e.target.value)}/></label><label><input type="checkbox" checked={onlyPaying} onChange={e=>setOnlyPaying(e.target.checked)}/> Aguardando pagamento</label><div className="cash-grid-legend"><span><i className="occupied"/>Aberta</span><span><i className="awaiting"/>Pagamento</span><span><i className="available"/>Livre</span></div></div>
-      <section className="cash-grid-section" aria-labelledby="cash-open-title"><header><h2 id="cash-open-title">Comandas abertas <span>{emAndamentoIds.length}</span></h2></header><div className="cash-comandas-grid">{emAndamentoIds.filter(id=>!onlyPaying||comandas[id]?.status==="paying").filter(id=>!search||String(id).includes(search)||String(comandas[id]?.mesa||'').includes(search)).map(id=>{const c=comandas[id];return <button key={id} className={'cash-comanda occupied '+(c.status==='paying'?'awaiting':'')} onClick={()=>void openSummary(id)} aria-label={'Abrir conta da comanda '+id}><span className="cash-comanda-status">{statusLabel(c.status)}</span><strong className="cash-comanda-number">{String(id).padStart(2,'0')}</strong><span className="cash-comanda-bottom"><span>Mesa {c.mesa}</span><b>{cash(c.saldo??c.total_pedidos)}</b></span></button>})}</div>{!emAndamentoIds.length&&<p className="cash-grid-empty">Nenhuma comanda aberta. Escolha uma livre abaixo para iniciar.</p>}</section>
+      <div className="cash-grid-toolbar"><label className="register-search"><Icon name="search" size={17}/><input placeholder="Buscar mesa ou comanda · F2" aria-label="Buscar mesa ou comanda" value={search} onChange={e=>setSearch(e.target.value)}/></label><label><input type="checkbox" checked={onlyPaying} onChange={e=>setOnlyPaying(e.target.checked)}/> Aguardando pagamento</label><div className="cash-grid-legend"><span><i className="just-opened"/>Aberta</span><span><i className="occupied"/>Pedindo</span><span><i className="awaiting"/>Pagamento</span><span><i className="available"/>Livre</span></div></div>
+      <section className="cash-grid-section" aria-labelledby="cash-open-title"><header><h2 id="cash-open-title">Comandas abertas <span>{emAndamentoIds.length}</span></h2></header><div className="cash-comandas-grid">{emAndamentoIds.filter(id=>!onlyPaying||comandas[id]?.status==="paying").filter(id=>!search||String(id).includes(search)||String(comandas[id]?.mesa||'').includes(search)).map(id=>{const c=comandas[id];return <button key={id} className={'cash-comanda occupied '+(c.status==='paying'?'awaiting':c.status==='open'?'just-opened':'')} onClick={()=>void openSummary(id)} aria-label={'Abrir conta da comanda '+id}><span className="cash-comanda-status">{statusLabel(c.status)}</span><strong className="cash-comanda-number">{String(id).padStart(2,'0')}</strong><span className="cash-comanda-bottom"><span>Mesa {c.mesa}</span><b>{cash(c.saldo??c.total_pedidos)}</b></span></button>})}</div>{!emAndamentoIds.length&&<p className="cash-grid-empty">Nenhuma comanda aberta. Escolha uma livre abaixo para iniciar.</p>}</section>
       <section className="cash-grid-section cash-free-grid-section" aria-labelledby="cash-free-title"><header><h2 id="cash-free-title">Comandas livres <span>{livresIds.length}</span></h2></header><div className="cash-comandas-grid free-grid">{livresIds.filter(id=>!search||String(id).includes(search)).map(id=><button key={id} className="cash-comanda available" aria-label={'Abrir comanda livre '+id} onClick={()=>{setModal({type:'abrir',id});setMesaAbrir('');setCaixaError('')}}><strong className="cash-comanda-number">{String(id).padStart(2,'0')}</strong><span>Livre <Icon name="plus" size={13}/></span></button>)}</div></section>
       {summary&&<div className="account-modal-backdrop" onClick={e=>{if(e.target===e.currentTarget)setSummary(null)}}><section className="register-account-workspace account-modal" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
-              <header className="register-receipt-heading">
-                <button
-                  className="account-modal-close icon-button"
-                  aria-label="Fechar conta"
-                  onClick={() => setSummary(null)}
-                >
-                  <Icon name="close" size={20} />
-                </button>
-                <span className="register-receipt-number">
-                  {String(summary.comanda.id).padStart(2, "0")}
-                </span>
-                <div>
-                  <h2 id="account-modal-title">Comanda {summary.comanda.id}</h2>
-                  <p>
-                    Mesa {summary.comanda.mesa}
-                    <span
-                      className={`register-status ${summary.comanda.status === "paying" ? "paying" : ""}`}
-                    >
-                      {statusLabel(summary.comanda.status)}
-                    </span>
-                  </p>
+              <button
+                className="account-modal-close icon-button"
+                aria-label="Fechar conta"
+                onClick={() => setSummary(null)}
+              >
+                <Icon name="close" size={20} />
+              </button>
+              <header className="account-modal-topbar">
+                <div className="account-modal-title">
+                  <span className="register-receipt-number">
+                    {String(summary.comanda.id).padStart(2, "0")}
+                  </span>
+                  <span
+                    className={`account-status-pill ${summary.comanda.status === "paying" ? "paying" : ""}`}
+                  >
+                    {statusLabel(summary.comanda.status)}
+                  </span>
+                  <h2 id="account-modal-title">Pedido #{summary.comanda.id}</h2>
                 </div>
+                <div className="account-modal-toolbar">
+                  <label className="account-modal-search">
+                    <Icon name="search" size={16} />
+                    <input
+                      placeholder="Buscar Produto…"
+                      value={itemSearch}
+                      onChange={(e) => setItemSearch(e.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={summary.comanda.status === "closed" || !!summary.comanda.locked}
+                    onClick={() => setQuickAddOpen(true)}
+                  >
+                    <Icon name="plus" size={16} />
+                    Produtos
+                  </button>
+                </div>
+              </header>
+              <div className="account-modal-columns">
+              <aside className="account-modal-sidebar">
+              <div className="account-modal-meta">
+                <p>
+                  <Icon name="clock" size={14} />
+                  Iniciado em {formatIniciado(summary.comanda.created_at)}
+                </p>
+                <textarea
+                  className="account-modal-observation"
+                  placeholder="Anotar observação…"
+                  value={obsDraft}
+                  onChange={(e) => setObsDraft(e.target.value)}
+                  onBlur={() => void saveObservation()}
+                />
+                <label className="account-modal-lock">
+                  <span>Bloquear Pedido</span>
+                  <span className="switch">
+                    <input
+                      type="checkbox"
+                      checked={!!summary.comanda.locked}
+                      onChange={() => void toggleLocked()}
+                    />
+                    <span className="switch-track" />
+                  </span>
+                </label>
+              </div>
+              <div className="register-adjustments">
+                <div className="register-adjustments-heading">
+                  <Icon name="receipt" size={16} />
+                  Serviço, couvert e CPF
+                </div>
+                <div className="register-adjustment-fields">
+                  <label className="register-service">
+                    <input
+                      type="checkbox"
+                      checked={!!summary.comanda.service_tax_percent}
+                      onChange={() => void toggleServiceTax()}
+                    />
+                    <span>
+                      Serviço de 10%<small>Não incide sobre couvert</small>
+                    </span>
+                  </label>
+                  <div className="register-couvert">
+                    <label>
+                      Pessoas para couvert
+                      <input
+                        aria-label="Pessoas para couvert"
+                        type="number"
+                        min="0"
+                        value={summary.comanda.people_count || 0}
+                        onChange={(e) => void setPeople(e.target.value)}
+                      />
+                    </label>
+                    <button
+                      className="btn btn-secondary"
+                      disabled={!(summary.comanda.people_count > 0)}
+                      onClick={() => void handleLancarCouvert()}
+                    >
+                      Lançar couvert
+                    </button>
+                    <small>Cobrado somente após lançar.</small>
+                  </div>
+                  <label className="register-cpf">
+                    CPF do cliente
+                    <input
+                      ref={cpfInputRef}
+                      placeholder="Opcional"
+                      value={summary.comanda.client_cpf || ""}
+                      onChange={(e) => void setCPF(e.target.value)}
+                    />
+                  </label>
+                </div>
+              </div>
+              <div className="account-modal-sidebar-bottom">
                 <details className="register-options">
                   <summary>
-                    Opções da conta <span>⌄</span>
+                    Mais Opções <span>⌄</span>
                   </summary>
                   <div>
                     <button onClick={()=>{setModal("agrupar");setAgruparDestino(summary.comanda.id);setAgruparOrigens([]);setCaixaError("")}} disabled={comandasAbertas.length<2}>Juntar comandas</button>
@@ -584,31 +780,33 @@ export default function Caixa() {
                     </button>
                   </div>
                 </details>
-              </header>
+                <button
+                  type="button"
+                  className="sidebar-link"
+                  onClick={() => setSummary(null)}
+                >
+                  <Icon name="arrow" size={16} style={{ transform: "rotate(180deg)" }} />
+                  Voltar
+                </button>
+              </div>
+              </aside>
+              <div className="account-modal-main">
               <div className="account-scroll-body">
               <div className="register-receipt-tools">
                 <strong>
-                  Consumo{" "}
+                  Itens do Pedido{" "}
                   <span>
-                    {summary.pedidos.reduce((n, p) => n + p.quantity, 0)} itens
+                    ({summary.pedidos.reduce((n, p) => n + p.quantity, 0)})
                   </span>
                 </strong>
-                <div>
-                  <button onClick={printComanda}>
-                    <Icon name="print" size={16} />
-                    Imprimir pré-conta
-                  </button>
-                  <button
-                    disabled={!summary.pedidos.length}
-                    onClick={() => {
-                      setPaymentOpen(true);
-                      setCobrancaSeparadaIds([]);
-                      setCaixaError("");
-                    }}
-                  >
-                    Cobrança separada
-                  </button>
-                </div>
+                <label className="account-modal-full-toggle">
+                  <input
+                    type="checkbox"
+                    checked={exibicaoCompleta}
+                    onChange={(e) => setExibicaoCompleta(e.target.checked)}
+                  />
+                  Exibição Completa
+                </label>
               </div>
               <div className="register-consumption">
                 <table>
@@ -618,106 +816,61 @@ export default function Caixa() {
                       <th className="numeric">Qtd.</th>
                       <th className="numeric">Unitário</th>
                       <th className="numeric">Valor</th>
+                      <th className="register-consumption-actions-head" />
                     </tr>
                   </thead>
                   <tbody>
-                    {groupedPedidos.map((g, i) => (
+                    {visiblePedidos.map((g, i) => (
                       <tr key={i}>
                         <td>
                           <strong>{g.item_name}</strong>
-                          {textoResumoAddonsPedido(g) && (
+                          {exibicaoCompleta && textoResumoAddonsPedido(g) && (
                             <small>{textoResumoAddonsPedido(g)}</small>
                           )}
-                          {g.observations && <small>{g.observations}</small>}
+                          {exibicaoCompleta && g.observations && <small>{g.observations}</small>}
+                          {(() => {
+                            const quem = [...new Set((g.rows || []).map((r) => r.launched_by).filter(Boolean))];
+                            return quem.length ? <small>Lançado por {quem.join(", ")}</small> : null;
+                          })()}
                         </td>
                         <td className="numeric">{g.quantity}</td>
                         <td className="numeric">{cash(g.unit_price)}</td>
                         <td className="numeric">
                           <strong>{cash(g.lineTotal)}</strong>
                         </td>
+                        <td className="register-consumption-actions">
+                          <ItemActionsMenu
+                            label={`Mais ações de ${g.item_name}`}
+                            actions={[
+                              { label: "Aumentar +1", onClick: () => incrementGroup(g), disabled: !!summary.comanda.locked },
+                              { label: "Diminuir -1", onClick: () => decrementGroup(g), disabled: !!summary.comanda.locked },
+                              { label: "Editar", onClick: () => openEditGroup(g), disabled: g.rows.length !== 1 || !!summary.comanda.locked },
+                              { label: "Excluir", danger: true, onClick: () => deleteGroup(g), disabled: !!summary.comanda.locked },
+                            ]}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {!groupedPedidos.length && (
+                {!visiblePedidos.length && (
                   <p className="register-list-empty">
-                    Nenhum produto lançado nesta comanda.
+                    {groupedPedidos.length
+                      ? "Nenhum produto encontrado."
+                      : "Nenhum produto lançado nesta comanda."}
                   </p>
                 )}
               </div>
-              <div className="register-add-products">
-                <CaixaQuickAdd
-                  key={summary.comanda.id}
-                  comandaId={summary.comanda.id}
-                  comandaStatus={summary.comanda.status}
-                  onItemAdded={refreshSummary}
-                />
-              </div>
-              <details className="register-adjustments">
-                <summary>
-                  <span>
-                    <Icon name="receipt" size={16} />
-                    Serviço, couvert e CPF
-                  </span>
-                  <span>
-                    {summary.comanda.service_tax_percent
-                      ? `Serviço ${summary.comanda.service_tax_percent}%`
-                      : "Sem serviço"}{" "}
-                    · Couvert {cash(summary.couvert)} <b>⌄</b>
-                  </span>
-                </summary>
-                <div className="register-adjustment-fields">
-                  <label className="register-service">
-                    <input
-                      type="checkbox"
-                      checked={!!summary.comanda.service_tax_percent}
-                      onChange={() => void toggleServiceTax()}
-                    />
-                    <span>
-                      Serviço de 10%<small>Não incide sobre couvert</small>
-                    </span>
-                  </label>
-                  <div className="register-couvert">
-                    <label>
-                      Pessoas para couvert
-                      <input
-                        aria-label="Pessoas para couvert"
-                        type="number"
-                        min="0"
-                        value={summary.comanda.people_count || 0}
-                        onChange={(e) => void setPeople(e.target.value)}
-                      />
-                    </label>
-                    <button
-                      className="btn btn-secondary"
-                      disabled={!(summary.comanda.people_count > 0)}
-                      onClick={() => void handleLancarCouvert()}
-                    >
-                      Lançar couvert
-                    </button>
-                    <small>Cobrado somente após lançar.</small>
-                  </div>
-                  <label className="register-cpf">
-                    CPF do cliente
-                    <input
-                      placeholder="Opcional"
-                      value={summary.comanda.client_cpf || ""}
-                      onChange={(e) => void setCPF(e.target.value)}
-                    />
-                  </label>
-                </div>
-              </details>
               </div>
               <footer className="register-settlement">
                 <div className="register-breakdown">
-                  <span>Couvert <strong>{cash(summary.couvert)}</strong></span>
+                  <span>Subtotal <strong>{cash(summary.subtotal)}</strong></span>
                   <span>
-                    Consumo sem couvert{" "}
-                    <strong>{cash(summary.subtotal-summary.couvert)}</strong>
+                    (+) Serviço <strong>{cash(summary.serviceTax)}</strong>
                   </span>
-                  <span>
-                    Serviço <strong>{cash(summary.serviceTax)}</strong>
-                  </span>
+                  {summary.couvert > 0 && (
+                    <span>Couvert <strong>{cash(summary.couvert)}</strong></span>
+                  )}
                   {summary.paidTotal > 0 && (
                     <span>
                       Já recebido <strong>{cash(summary.paidTotal)}</strong>
@@ -725,41 +878,56 @@ export default function Caixa() {
                   )}
                 </div>
                 <div className="register-pay-row">
-                  <div>
-                    <span>Saldo a receber</span>
-                    <strong>{cash(summary.total)}</strong>
-                  </div>
-                  <button
-                    className="btn register-pay-button"
-                    onClick={registrarPago}
-                    disabled={summary.comanda.status === "closed"}
-                  >
-                    <Icon name="check" size={20} />
-                    Registrar pagamento
+                  <button type="button" className="register-print-link" onClick={printComanda}>
+                    <Icon name="print" size={18} />
+                    Imprimir
                   </button>
+                  <div className="register-pay-row-right">
+                    <div className="register-pay-total">
+                      <span>Total</span>
+                      <strong>{cash(summary.total)}</strong>
+                    </div>
+                    <button
+                      className="btn register-pay-button"
+                      onClick={registrarPago}
+                      disabled={summary.comanda.status === "closed"}
+                    >
+                      <Icon name="check" size={20} />
+                      Pagamento
+                    </button>
+                  </div>
                 </div>
               </footer>
+              </div>
+              </div>
 
         {caixaError&&<p className="error-banner" role="alert">{caixaError}</p>}
-      </section></div>}
+      </section>
+      <CaixaQuickAdd
+        open={quickAddOpen}
+        comandaId={summary.comanda.id}
+        comandaStatus={summary.comanda.status}
+        onClose={() => setQuickAddOpen(false)}
+        onItemAdded={refreshSummary}
+      /></div>}
 
-      {caixaError && <p className="text-sm text-red-600">{caixaError}</p>}
+      {caixaError && <p className="text-sm text-[#d11d1d]">{caixaError}</p>}
 
       {modal === "agrupar" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-[2px]">
-          <div className="my-auto flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <div className="border-b border-slate-100 bg-slate-50 px-6 py-4">
-              <h3 className="text-lg font-bold text-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-[2px]">
+          <div className="my-auto flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[#2b3036] bg-[#212226] shadow-2xl">
+            <div className="border-b border-[#242a30] bg-[#21272c] px-6 py-4">
+              <h3 className="text-lg font-bold text-[#ccd2e1]">
                 Juntar comandas
               </h3>
-              <p className="mt-1 text-sm text-slate-600">
+              <p className="mt-1 text-sm text-[#b5bfcf]">
                 Selecione a comanda destino e as comandas de origem. Todos os
                 pedidos vão para o destino; as origens são fechadas.
               </p>
             </div>
             <div className="grid min-h-0 flex-1 gap-0 md:grid-cols-3">
-              <div className="border-b border-slate-100 p-5 md:border-b-0 md:border-r">
-                <p className="mb-2 text-xs font-bold uppercase text-slate-500">
+              <div className="border-b border-[#242a30] p-5 md:border-b-0 md:border-r">
+                <p className="mb-2 text-xs font-bold uppercase text-[#8f9db2]">
                   Destino
                 </p>
                 <div className="flex max-h-56 flex-wrap gap-2 overflow-y-auto">
@@ -770,8 +938,8 @@ export default function Caixa() {
                       onClick={() => setAgruparDestino(Number(id))}
                       className={`rounded-xl px-3 py-2 text-sm font-semibold ${
                         agruparDestino === Number(id)
-                          ? "bg-amber-500 text-slate-900"
-                          : "bg-slate-100 text-slate-800 hover:bg-slate-200"
+                          ? "bg-[#ea9404] text-[#0d0e10]"
+                          : "bg-[#242a30] text-[#c5cedc] hover:bg-[#2b3036]"
                       }`}
                     >
                       {id} · Mesa {c.mesa}
@@ -779,8 +947,8 @@ export default function Caixa() {
                   ))}
                 </div>
               </div>
-              <div className="border-b border-slate-100 p-5 md:border-b-0 md:border-r">
-                <p className="mb-2 text-xs font-bold uppercase text-slate-500">
+              <div className="border-b border-[#242a30] p-5 md:border-b-0 md:border-r">
+                <p className="mb-2 text-xs font-bold uppercase text-[#8f9db2]">
                   Origens (unir ao destino)
                 </p>
                 <div className="max-h-56 space-y-2 overflow-y-auto">
@@ -789,27 +957,27 @@ export default function Caixa() {
                     .map(([id, c]) => (
                       <label
                         key={id}
-                        className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50"
+                        className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#242a30] px-3 py-2 hover:bg-[#21272c]"
                       >
                         <input
                           type="checkbox"
                           checked={agruparOrigens.includes(Number(id))}
                           onChange={() => toggleAgruparOrigem(id)}
                         />
-                        <span className="text-sm text-slate-800">
+                        <span className="text-sm text-[#c5cedc]">
                           Comanda {id} — Mesa {c.mesa}
                         </span>
                       </label>
                     ))}
                 </div>
               </div>
-              <div className="flex flex-col justify-between bg-slate-50/50 p-5">
+              <div className="flex flex-col justify-between bg-[#21272c]/50 p-5">
                 <div>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-[#8f9db2]">
                     Destino: comanda {agruparDestino ?? "—"}
                   </p>
                   <p className="mt-3 text-sm font-semibold">Saldo após juntar: {cash([agruparDestino,...agruparOrigens].filter(Boolean).reduce((total,id)=>total+Number(comandas[id]?.saldo||0),0))}</p>
-                  <p className="mt-2 text-xs text-slate-500">Os recebimentos e as taxas de cada origem serão preservados.</p>
+                  <p className="mt-2 text-xs text-[#8f9db2]">Os recebimentos e as taxas de cada origem serão preservados.</p>
                 </div>
                 <div className="mt-4 flex gap-2">
                   <button
@@ -837,12 +1005,12 @@ export default function Caixa() {
       )}
 
       {modal?.type === "abrir" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-bold text-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[#2b3036] bg-[#212226] p-6 shadow-xl">
+            <h3 className="text-lg font-bold text-[#ccd2e1]">
               Abrir comanda {modal.id}
             </h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-[#8f9db2]">
               Informe o número da mesa para iniciar o atendimento.
             </p>
             <input
@@ -850,7 +1018,7 @@ export default function Caixa() {
               placeholder="Número da mesa"
               value={mesaAbrir}
               onChange={(e) => setMesaAbrir(e.target.value)}
-              className="mt-4 w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-800"
+              className="mt-4 w-full rounded-xl border border-[#2b3036] px-4 py-3 text-[#c5cedc]"
               autoFocus
               onKeyDown={(e) => e.key === "Enter" && void abrirComandaLivre()}
             />
@@ -878,9 +1046,9 @@ export default function Caixa() {
       )}
 
       {modal?.type === "trocarNumero" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
-            <h3 className="mb-3 text-lg font-bold text-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[#2b3036] bg-[#212226] p-5 shadow-xl">
+            <h3 className="mb-3 text-lg font-bold text-[#c5cedc]">
               Trocar número da comanda
             </h3>
             <input
@@ -890,7 +1058,7 @@ export default function Caixa() {
               placeholder="Novo número"
               value={novoNumero}
               onChange={(e) => setNovoNumero(e.target.value)}
-              className="mb-4 w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-slate-800"
+              className="mb-4 w-full rounded-lg border border-[#2d353e] bg-[#21272c] px-4 py-2 text-[#c5cedc]"
             />
             <div className="flex gap-2">
               <button
@@ -916,9 +1084,9 @@ export default function Caixa() {
       )}
 
       {modal?.type === "trocarMesa" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
-            <h3 className="mb-3 text-lg font-bold text-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[#2b3036] bg-[#212226] p-5 shadow-xl">
+            <h3 className="mb-3 text-lg font-bold text-[#c5cedc]">
               Trocar mesa
             </h3>
             <input
@@ -926,7 +1094,7 @@ export default function Caixa() {
               placeholder="Número da mesa"
               value={novaMesa}
               onChange={(e) => setNovaMesa(e.target.value)}
-              className="mb-4 w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-slate-800"
+              className="mb-4 w-full rounded-lg border border-[#2d353e] bg-[#21272c] px-4 py-2 text-[#c5cedc]"
             />
             <div className="flex gap-2">
               <button
@@ -951,25 +1119,57 @@ export default function Caixa() {
         </div>
       )}
 
+      {editGroupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[#2b3036] bg-[#212226] p-5 shadow-xl">
+            <h3 className="mb-3 text-lg font-bold text-[#c5cedc]">Editar item</h3>
+            <label className="mb-1 block text-sm font-medium text-[#c7ccd1]">Quantidade</label>
+            <input
+              type="number"
+              min="1"
+              value={editGroupModal.quantity}
+              onChange={(e) => setEditGroupModal((prev) => ({ ...prev, quantity: e.target.value }))}
+              className="mb-3 w-full rounded-lg border border-[#2d353e] bg-[#21272c] px-4 py-2 text-[#c5cedc]"
+            />
+            <label className="mb-1 block text-sm font-medium text-[#c7ccd1]">Descrição</label>
+            <textarea
+              rows={3}
+              value={editGroupModal.observations}
+              onChange={(e) => setEditGroupModal((prev) => ({ ...prev, observations: e.target.value }))}
+              placeholder="Ex.: sem gelo, ponto da carne, etc."
+              className="mb-4 w-full rounded-lg border border-[#2d353e] bg-[#21272c] px-3 py-2 text-sm text-[#c5cedc]"
+            />
+            <div className="flex gap-2">
+              <button type="button" className="btn btn-secondary flex-1" onClick={() => setEditGroupModal(null)}>
+                Cancelar
+              </button>
+              <button type="button" className="btn btn-primary flex-1" onClick={() => void saveEditGroup()}>
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modal === "cobrancaSeparada" && summary && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-            <div className="border-b border-slate-200 p-5">
-              <h3 className="text-lg font-bold text-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[#2b3036] bg-[#212226] shadow-xl">
+            <div className="border-b border-[#2b3036] p-5">
+              <h3 className="text-lg font-bold text-[#c5cedc]">
                 Cobrança separada
               </h3>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-[#8f9db2]">
                 Os itens serão registrados como pagos. O saldo restante continua
                 na comanda.
               </p>
             </div>
-            <ul className="flex-1 space-y-2 overflow-y-auto p-5 text-slate-700">
+            <ul className="flex-1 space-y-2 overflow-y-auto p-5 text-[#bbc6d6]">
               {summary.pedidos.map((p) => {
                 const ad = textoResumoAddonsPedido(p);
                 return (
                   <li
                     key={p.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-[#242a30] px-3 py-2"
                   >
                     <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
                       <input
@@ -980,11 +1180,11 @@ export default function Caixa() {
                       <span className="truncate text-sm">
                         {p.quantity}x {p.item_name}
                         {ad ? (
-                          <span className="text-emerald-700">{ad}</span>
+                          <span className="text-[#02ca91]">{ad}</span>
                         ) : null}
                       </span>
                     </label>
-                    <span className="shrink-0 text-sm text-slate-600">
+                    <span className="shrink-0 text-sm text-[#b5bfcf]">
                       R${" "}
                       {(p.quantity * p.unit_price).toFixed(2).replace(".", ",")}
                     </span>
@@ -992,11 +1192,11 @@ export default function Caixa() {
                 );
               })}
             </ul>
-            <div className="border-t border-slate-200 bg-slate-50 p-5">
+            <div className="border-t border-[#2b3036] bg-[#21272c] p-5">
               {caixaError && (
-                <p className="mb-2 text-sm text-red-600">{caixaError}</p>
+                <p className="mb-2 text-sm text-[#d11d1d]">{caixaError}</p>
               )}
-              <p className="mb-3 flex justify-between font-semibold text-slate-800">
+              <p className="mb-3 flex justify-between font-semibold text-[#c5cedc]">
                 Total seleção
                 <span>
                   {(() => {

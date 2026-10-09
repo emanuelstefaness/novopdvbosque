@@ -33,11 +33,7 @@ const groups = [
 export default function AppShell({ children }) {
   const { waiter, logout } = useWaiter(),
     location = useLocation();
-  const [open, setOpen] = useState(false),
-    [connected, setConnected] = useState(() => getSocket().connected);
-  const [collapsed,setCollapsed]=useState(()=>{try{return localStorage.getItem('pdv-menu-collapsed')==='true'}catch{return false}});
-  const toggleDesktopMenu=()=>{const next=!collapsed;setCollapsed(next);try{localStorage.setItem('pdv-menu-collapsed',String(next))}catch{/* Preferência opcional. */}};
-  useEffect(()=>{const close=e=>{if(e.key==='Escape')setOpen(false)};window.addEventListener('keydown',close);return()=>window.removeEventListener('keydown',close)},[]);
+  const [connected, setConnected] = useState(() => getSocket().connected);
   useEffect(() => {
     const s = getSocket(),
       on = () => setConnected(true),
@@ -49,9 +45,6 @@ export default function AppShell({ children }) {
       s.off("disconnect", off);
     };
   }, []);
-  const current =
-    groups.flatMap((g) => g[1]).find((x) => x[0] === location.pathname)?.[1] ||
-    "Lançar pedidos";
   if (!waiter.isCaixa) {
     return (
       <div className="pdv-app waiter-app">
@@ -66,93 +59,27 @@ export default function AppShell({ children }) {
       </div>
     );
   }
+  const activeGroup =
+    groups.find(([, links]) => links.some(([path]) => path === location.pathname)) ||
+    groups[0];
   return (
-    <div className={`pdv-app ${collapsed?'menu-collapsed':''}`}>
-      {open && (
-        <button
-          className="sidebar-scrim"
-          aria-label="Fechar menu"
-          onClick={() => setOpen(false)}
-        />
-      )}
-      <aside id="app-navigation" className={`app-sidebar ${open ? "is-open" : ""}`}>
-        <Link className="app-brand" to="/" onClick={() => setOpen(false)}>
-          <img className="establishment-logo sidebar-logo" src="/logo-bosque-transparente.png" alt="Bosque da Carne" />
-        </Link>
-        <div className="store-label">
-          <span className="store-avatar">BC</span>
-          <div>
-            <strong>Bosque da Carne</strong>
-            <small>Operação do restaurante</small>
-          </div>
-        </div>
-        <nav aria-label="Menu principal">
-          {groups.map(([title, links]) => (
-            <div className="nav-group" key={title}>
-              <p>{title}</p>
-              {links
-                .filter(
-                  ([path]) =>
-                    waiter?.isCaixa || path === "/" || path === "/garcons",
-                )
-                .map(([path, label, icon]) => (
-                  <NavLink
-                    end={path === "/"}
-                    key={path}
-                    to={path}
-                    onClick={() => setOpen(false)}
-                    className={({ isActive }) =>
-                      `nav-item ${isActive ? "active" : ""}`
-                    }
-                  >
-                    <Icon name={icon} />
-                    <span>{label}</span>
-                  </NavLink>
-                ))}
-            </div>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <Link to="/pedir" className="nav-item">
-            <Icon name="book" />
-            <span>Ver cardápio online</span>
-            <Icon name="arrow" size={15} />
+    <div className="pdv-app pdv-app-ribbon">
+      <header className="app-ribbon">
+        <div className="ribbon-top">
+          <Link className="app-brand ribbon-brand" to="/">
+            <img className="establishment-logo ribbon-logo" src="/logo-bosque-transparente-256.png" alt="Bosque da Carne" />
           </Link>
-          <div className="profile-row">
-            <span className="profile-avatar">
-              <Icon name="user" size={18} />
-            </span>
-            <div>
-              <strong>
-                {waiter?.isCaixa ? "Operador de caixa" : waiter?.name}
-              </strong>
-              <small>
-                {waiter?.isCaixa ? "Caixa e produção" : "Atendimento"}
-              </small>
-            </div>
-            <button onClick={logout} title="Sair" aria-label="Sair">
-              <Icon name="logout" size={18} />
-            </button>
-          </div>
-        </div>
-      </aside>
-      <div className="app-workspace">
-        <header className="app-topbar">
-          <div className="topbar-left">
-            <button type="button" className="desktop-menu icon-button" onClick={toggleDesktopMenu} aria-label={collapsed?'Abrir menu':'Recolher menu'} aria-expanded={!collapsed} aria-controls="app-navigation" title={collapsed?'Abrir menu':'Recolher menu'}><Icon name="menu" /></button>
-            <button
-              className="mobile-menu icon-button"
-              onClick={() => setOpen(value=>!value)}
-              aria-label={open?'Recolher menu':'Abrir menu'}
-              aria-expanded={open}
-              aria-controls="app-navigation"
-            >
-              <Icon name="menu" />
-            </button>
-            <span className="breadcrumb">
-              Operação <span>/</span> <strong>{current}</strong>
-            </span>
-          </div>
+          <nav className="ribbon-tabs" aria-label="Menu principal">
+            {groups.map(([title, links]) => (
+              <Link
+                key={title}
+                to={links[0][0]}
+                className={`ribbon-tab ${activeGroup[0] === title ? "active" : ""}`}
+              >
+                {title}
+              </Link>
+            ))}
+          </nav>
           <div className="topbar-right">
             <span className={`connection ${connected ? "connected" : ""}`}>
               <i />
@@ -164,19 +91,37 @@ export default function AppShell({ children }) {
                 month: "long",
               })}
             </span>
+            <Link to="/pedir" className="icon-button" aria-label="Ver cardápio online" title="Ver cardápio online">
+              <Icon name="book" size={18} />
+            </Link>
+            <button type="button" className="icon-button" onClick={logout} aria-label="Bloquear ou trocar usuário" title="Bloquear ou trocar usuário">
+              <Icon name="logout" size={18} />
+            </button>
           </div>
-        </header>
-        <main
-          className={`app-content page-${location.pathname.split("/")[1] || "home"}`}
-        >
-          {children}
-        </main>
-        <footer className="app-footer">
-          <span>Bosque da Carne</span>
-          <span>Gestão do restaurante</span>
-        </footer>
-      </div>
+        </div>
+        <nav className="ribbon-sub" aria-label={activeGroup[0]}>
+          {activeGroup[1].map(([path, label, icon]) => (
+            <NavLink
+              end={path === "/"}
+              key={path}
+              to={path}
+              className={({ isActive }) => `ribbon-sub-item ${isActive ? "active" : ""}`}
+            >
+              <Icon name={icon} size={17} />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      </header>
+      <main
+        className={`app-content page-${location.pathname.split("/")[1] || "home"}`}
+      >
+        {children}
+      </main>
+      <footer className="app-footer">
+        <span>Bosque da Carne</span>
+        <span>Gestão do restaurante</span>
+      </footer>
     </div>
   );
 }
-

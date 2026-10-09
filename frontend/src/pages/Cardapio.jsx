@@ -123,24 +123,24 @@ export default function Cardapio() {
     }
   }
 
-  if (loading && categories.length === 0) return <div className="p-4 text-slate-500">Carregando...</div>
+  if (loading && categories.length === 0) return <div className="p-4 text-[var(--muted)]">Carregando...</div>
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-bold text-slate-800">Cadastro do cardápio</h1>
-      {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <h1 className="mb-4 text-xl font-bold text-[var(--ink)]">Cadastro do cardápio</h1>
+      {error && <p className="mb-3 rounded-lg bg-[#3a1d1d] px-3 py-2 text-sm text-[#f08a8a]">{error}</p>}
 
-      <div className="mb-4 flex gap-2 border-b border-slate-200">
+      <div className="mb-4 flex gap-2 border-b border-[var(--line)]">
         <button
           type="button"
-          className={`px-3 py-2 text-sm font-medium ${tab === 'categorias' ? 'border-b-2 border-amber-500 text-amber-600' : 'text-slate-600 hover:text-slate-800'}`}
+          className={`px-3 py-2 text-sm font-medium ${tab === 'categorias' ? 'border-b-2 border-amber-500 text-amber-600' : 'text-[var(--muted)] hover:text-[var(--ink)]'}`}
           onClick={() => setTab('categorias')}
         >
           Categorias
         </button>
         <button
           type="button"
-          className={`px-3 py-2 text-sm font-medium ${tab === 'itens' ? 'border-b-2 border-amber-500 text-amber-600' : 'text-slate-600 hover:text-slate-800'}`}
+          className={`px-3 py-2 text-sm font-medium ${tab === 'itens' ? 'border-b-2 border-amber-500 text-amber-600' : 'text-[var(--muted)] hover:text-[var(--ink)]'}`}
           onClick={() => setTab('itens')}
         >
           Itens
@@ -148,20 +148,20 @@ export default function Cardapio() {
       </div>
 
       {tab === 'categorias' && (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-200 p-3">
-            <h2 className="font-semibold text-slate-800">Categorias ({categories.length})</h2>
+        <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-sm">
+          <div className="flex items-center justify-between border-b border-[var(--line)] p-3">
+            <h2 className="font-semibold text-[var(--ink)]">Categorias ({categories.length})</h2>
             <button type="button" className="btn btn-primary" onClick={() => setModalCat({ type: 'new' })}>
               Nova categoria
             </button>
           </div>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-[var(--line)]">
             {categories.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 p-3">
                 <div>
-                  <span className="font-medium text-slate-800">{c.name}</span>
-                  <span className="ml-2 text-sm text-slate-500">({c.slug})</span>
-                  {c.sort_order != null && <span className="ml-2 text-xs text-slate-400">ordem: {c.sort_order}</span>}
+                  <span className="font-medium text-[var(--ink)]">{c.name}</span>
+                  <span className="ml-2 text-sm text-[var(--muted)]">({c.slug})</span>
+                  {c.sort_order != null && <span className="ml-2 text-xs text-[var(--muted)]">ordem: {c.sort_order}</span>}
                 </div>
                 <div className="flex gap-2">
                   <button type="button" className="btn btn-info text-sm" onClick={() => setModalCat({ type: 'edit', id: c.id, name: c.name, slug: c.slug, sort_order: c.sort_order ?? 0 })}>
@@ -178,14 +178,14 @@ export default function Cardapio() {
       )}
 
       {tab === 'itens' && (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-3">
+        <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] p-3">
             <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-slate-800">Itens</h2>
+              <h2 className="font-semibold text-[var(--ink)]">Itens</h2>
               <select
                 value={filterCategoryId}
                 onChange={(e) => setFilterCategoryId(e.target.value)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800"
+                className="rounded-lg border border-[var(--line)] bg-[var(--canvas)] px-3 py-1.5 text-sm text-[var(--ink)]"
               >
                 <option value="">Todas as categorias</option>
                 {categories.map((c) => (
@@ -207,7 +207,7 @@ export default function Cardapio() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                <tr className="border-b border-[var(--line)] bg-[var(--surface-2)] text-[var(--muted)]">
                   <th className="p-2 font-medium">Nome</th>
                   <th className="p-2 font-medium">Categoria</th>
                   <th className="p-2 font-medium">Preço</th>
@@ -218,32 +218,34 @@ export default function Cardapio() {
               </thead>
               <tbody>
                 {items.map((i) => (
-                  <tr key={i.id} className="border-b border-slate-100">
-                    <td className="p-2 font-medium text-slate-800">{i.name}</td>
-                    <td className="p-2 text-slate-600">{i.category_name || '-'}</td>
+                  <tr key={i.id} className="border-b border-[var(--line)]">
+                    <td className="p-2 font-medium text-[var(--ink)]">{i.name}</td>
+                    <td className="p-2 text-[var(--muted)]">{i.category_name || '-'}</td>
                     <td className="p-2">R$ {Number(i.price).toFixed(2).replace('.', ',')}</td>
-                    <td className="p-2 text-xs text-slate-500">
+                    <td className="p-2 text-xs text-[var(--muted)]">
                       {[i.is_grill && 'Churrasq.', i.is_kitchen && 'Cozinha', i.is_bar && 'Bar'].filter(Boolean).join(', ') || '-'}
                       {i.requires_meat_point ? ' · Ponto' : ''}
                       {i.is_prato_feito ? ' · Prato Feito' : ''}
                     </td>
                     <td className="p-2 text-xs">
                       {i.internal_only ? (
-                        <span className="rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-900">Só PDV interno</span>
+                        <span className="rounded bg-[#3a2f14] px-2 py-0.5 font-medium text-[#e0a43a]">Só PDV interno</span>
                       ) : (
-                        <span className="text-slate-600">Sim</span>
+                        <span className="text-[var(--muted)]">Sim</span>
                       )}
                     </td>
                     <td className="p-2">
-                      <button type="button" className="btn btn-info text-sm mr-2" onClick={() => setModalItem({ type: 'edit', item: i })}>Editar</button>
-                      <button type="button" className="btn btn-danger text-sm" onClick={() => handleDeleteItem(i.id)}>Excluir</button>
+                      <div className="flex gap-2">
+                        <button type="button" className="btn btn-info text-sm" onClick={() => setModalItem({ type: 'edit', item: i })}>Editar</button>
+                        <button type="button" className="btn btn-danger text-sm" onClick={() => handleDeleteItem(i.id)}>Excluir</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {items.length === 0 && <p className="p-4 text-center text-slate-500">Nenhum item.</p>}
+          {items.length === 0 && <p className="p-4 text-center text-[var(--muted)]">Nenhum item.</p>}
         </div>
       )}
 
@@ -279,16 +281,16 @@ function ModalCategoria({ modal, onClose, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
-        <h3 className="mb-3 text-lg font-bold text-slate-800">{modal.type === 'new' ? 'Nova categoria' : 'Editar categoria'}</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-xl">
+        <h3 className="mb-3 text-lg font-bold text-[var(--ink)]">{modal.type === 'new' ? 'Nova categoria' : 'Editar categoria'}</h3>
         <form onSubmit={submit}>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Nome</label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800" required />
-          <label className="block text-sm font-medium text-slate-700 mb-1">Slug (identificador único)</label>
-          <input type="text" value={slug} onChange={(e) => setSlug(e.target.value)} className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800" placeholder="ex: bebidas" />
-          <label className="block text-sm font-medium text-slate-700 mb-1">Ordem</label>
-          <input type="number" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className="mb-4 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800" />
+          <label className="block text-sm font-medium text-[var(--ink)] mb-1">Nome</label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="mb-3 w-full rounded-lg border border-[var(--line)] bg-[var(--canvas)] px-3 py-2 text-[var(--ink)]" required />
+          <label className="block text-sm font-medium text-[var(--ink)] mb-1">Slug (identificador único)</label>
+          <input type="text" value={slug} onChange={(e) => setSlug(e.target.value)} className="mb-3 w-full rounded-lg border border-[var(--line)] bg-[var(--canvas)] px-3 py-2 text-[var(--ink)]" placeholder="ex: bebidas" />
+          <label className="block text-sm font-medium text-[var(--ink)] mb-1">Ordem</label>
+          <input type="number" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className="mb-4 w-full rounded-lg border border-[var(--line)] bg-[var(--canvas)] px-3 py-2 text-[var(--ink)]" />
           <div className="flex gap-2">
             <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>Cancelar</button>
             <button type="submit" className="btn btn-primary flex-1">Salvar</button>
@@ -347,15 +349,15 @@ function ModalItem({ modal, categories, onClose, onSave }) {
   const categoryValid = categories.some((c) => String(c.id) === String(category_id))
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 overflow-y-auto">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-xl my-4">
-        <h3 className="mb-3 text-lg font-bold text-slate-800">{isEdit ? 'Editar item' : 'Novo item'}</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 overflow-y-auto">
+      <div className="w-full max-w-lg rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-xl my-4">
+        <h3 className="mb-3 text-lg font-bold text-[var(--ink)]">{isEdit ? 'Editar item' : 'Novo item'}</h3>
         <form onSubmit={submit}>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Categoria</label>
+          <label className="block text-sm font-medium text-[var(--ink)] mb-1">Categoria</label>
           <select
             value={categoryValid ? String(category_id) : ''}
             onChange={(e) => setCategory_id(e.target.value)}
-            className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800"
+            className="mb-3 w-full rounded-lg border border-[var(--line)] bg-[var(--canvas)] px-3 py-2 text-[var(--ink)]"
             required
             disabled={!categories.length}
           >
@@ -367,12 +369,12 @@ function ModalItem({ modal, categories, onClose, onSave }) {
               ))
             )}
           </select>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Nome</label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800" required />
-          <label className="block text-sm font-medium text-slate-700 mb-1">Preço (R$)</label>
-          <input type="text" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800" placeholder="0,00" required />
-          <label className="block text-sm font-medium text-slate-700 mb-1">Descrição (opcional)</label>
-          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="mb-4 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800" />
+          <label className="block text-sm font-medium text-[var(--ink)] mb-1">Nome</label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="mb-3 w-full rounded-lg border border-[var(--line)] bg-[var(--canvas)] px-3 py-2 text-[var(--ink)]" required />
+          <label className="block text-sm font-medium text-[var(--ink)] mb-1">Preço (R$)</label>
+          <input type="text" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} className="mb-3 w-full rounded-lg border border-[var(--line)] bg-[var(--canvas)] px-3 py-2 text-[var(--ink)]" placeholder="0,00" required />
+          <label className="block text-sm font-medium text-[var(--ink)] mb-1">Descrição (opcional)</label>
+          <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="mb-4 w-full rounded-lg border border-[var(--line)] bg-[var(--canvas)] px-3 py-2 text-[var(--ink)]" />
           <div className="mb-4 space-y-2">
             <label className="flex items-center gap-2"><input type="checkbox" checked={requires_meat_point} onChange={(e) => setRequires_meat_point(e.target.checked)} /> Pede ponto da carne</label>
             <label className="flex items-center gap-2"><input type="checkbox" checked={is_grill} onChange={(e) => setIs_grill(e.target.checked)} /> Churrasqueira</label>
@@ -383,8 +385,8 @@ function ModalItem({ modal, categories, onClose, onSave }) {
             <label className="flex items-start gap-2">
               <input type="checkbox" className="mt-1" checked={internal_only} onChange={(e) => setInternal_only(e.target.checked)} />
               <span>
-                <span className="font-medium text-slate-800">Só controle interno</span>
-                <span className="block text-xs font-normal text-slate-500">Não aparece no cardápio do pedir online nem pode ser pedido por esse canal.</span>
+                <span className="font-medium text-[var(--ink)]">Só controle interno</span>
+                <span className="block text-xs font-normal text-[var(--muted)]">Não aparece no cardápio do pedir online nem pode ser pedido por esse canal.</span>
               </span>
             </label>
           </div>

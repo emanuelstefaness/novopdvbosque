@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { Router } from "express";
+import { db } from "./db.js";
 const sessions = new Map();
 const password =
   process.env.PDV_CAIXA_PASSWORD || randomBytes(12).toString("base64url");
@@ -47,10 +48,28 @@ authRouter.post("/login", rateLimit(20), (req, res) => {
     !timingSafeEqual(digest(req.body?.password || ""), digest(password))
   )
     return res.status(401).json({ error: "Senha incorreta. Tente novamente." });
+  // Garçom precisa se identificar a cada acesso: o nome fica registrado em tudo que ele lançar.
+  let waiterName = null;
+  let waiterId = null;
+  if (role === "garcom") {
+    waiterName = String(req.body?.name || "").replace(/\s+/g, " ").trim();
+    if (waiterName.length < 2)
+      return res.status(400).json({ error: "Informe seu nome para entrar." });
+    if (waiterName.length > 40)
+      return res.status(400).json({ error: "Nome muito longo (máximo 40 letras)." });
+    const found = db.prepare("SELECT id, name FROM waiters WHERE name = ? COLLATE NOCASE").get(waiterName);
+    if (found) {
+      waiterId = found.id;
+      waiterName = found.name;
+    } else {
+      waiterId = Number(db.prepare("INSERT INTO waiters (name) VALUES (?)").run(waiterName).lastInsertRowid);
+    }
+  }
   const token = randomBytes(32).toString("hex");
   const session = {
     role,
-    name: role === "caixa" ? "Caixa" : "Garçom",
+    name: role === "caixa" ? "Caixa" : waiterName,
+    id: waiterId,
     isCaixa: role === "caixa",
     expires: Date.now() + 12 * 3600000,
   };

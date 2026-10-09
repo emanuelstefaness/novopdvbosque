@@ -72,7 +72,7 @@ pedidosRouter.post('/', (req, res) => {
       WHERE i.id = ?
     `).get(iid);
     if (!item) return res.status(404).json({ error: 'Item não encontrado' });
-    const comandaRow = db.prepare('SELECT status, closed_at FROM comandas WHERE id = ?').get(cid);
+    const comandaRow = db.prepare('SELECT status, closed_at, locked FROM comandas WHERE id = ?').get(cid);
     if (!comandaRow) {
       return res.status(400).json({ error: 'Comanda não encontrada. Abra a comanda no garçom (mesa) antes de lançar.' });
     }
@@ -80,15 +80,18 @@ pedidosRouter.post('/', (req, res) => {
     if (st === 'closed' || comandaRow.closed_at) {
       return res.status(400).json({ error: 'Esta comanda já foi fechada no caixa. Use uma comanda livre ou reabra informando a mesa.' });
     }
+    if (comandaRow.locked) {
+      return res.status(400).json({ error: 'Pedido bloqueado. Desbloqueie antes de lançar novos itens.' });
+    }
     const sector = getPedidoSector(item);
     const addons = resolveLancheAddonsFromBody(item, { extra_caramelized_onion, extra_hamburger });
     const unit_price = item.price + addons.unit_addon;
 
     const run = db.transaction(() => {
       const info = db.prepare(`
-        INSERT INTO pedidos (comanda_id, item_id, quantity, unit_price, observations, meat_point, caipirinha_base, caipirinha_picole, dose_accompaniment, prato_feito_espetinho_id, extra_caramelized_onion, extra_hamburger, sector)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(cid, iid, quantity, unit_price, observations != null && String(observations).trim() ? String(observations).trim() : null, meat_point || null, caipirinha_base || null, caipirinha_picole ? 1 : 0, dose_accompaniment || null, prato_feito_espetinho_id != null ? Number(prato_feito_espetinho_id) || null : null, addons.extra_caramelized_onion, addons.extra_hamburger, sector);
+        INSERT INTO pedidos (comanda_id, item_id, quantity, unit_price, observations, meat_point, caipirinha_base, caipirinha_picole, dose_accompaniment, prato_feito_espetinho_id, extra_caramelized_onion, extra_hamburger, sector, launched_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(cid, iid, quantity, unit_price, observations != null && String(observations).trim() ? String(observations).trim() : null, meat_point || null, caipirinha_base || null, caipirinha_picole ? 1 : 0, dose_accompaniment || null, prato_feito_espetinho_id != null ? Number(prato_feito_espetinho_id) || null : null, addons.extra_caramelized_onion, addons.extra_hamburger, sector, req.user?.name || null);
       const pedidoId = info.lastInsertRowid;
       const insStatus = db.prepare('INSERT OR REPLACE INTO pedido_sector_status (pedido_id, sector, status) VALUES (?, ?, ?)');
       if (sector) insStatus.run(pedidoId, sector, 'pending');
@@ -447,8 +450,9 @@ pedidosRouter.patch('/:id/sector-status', (req, res) => {
 
 pedidosRouter.patch('/:id', (req, res) => {
   const db = getDb(req);
-  const existing=db.prepare('SELECT p.*,c.status AS comanda_status FROM pedidos p JOIN comandas c ON c.id=p.comanda_id WHERE p.id=?').get(Number(req.params.id));
+  const existing=db.prepare('SELECT p.*,c.status AS comanda_status,c.locked AS comanda_locked FROM pedidos p JOIN comandas c ON c.id=p.comanda_id WHERE p.id=?').get(Number(req.params.id));
   if(!existing || existing.paid_at || existing.paid_quantity>0 || existing.comanda_status==='closed') return res.status(400).json({error:'Item pago ou comanda fechada não pode ser alterado'});
+  if(existing.comanda_locked) return res.status(400).json({error:'Pedido bloqueado. Desbloqueie antes de alterar.'});
   if(req.body.quantity!==undefined && (!Number.isInteger(Number(req.body.quantity)) || Number(req.body.quantity)<1)) return res.status(400).json({error:'Quantidade inválida'});
   if(req.body.unit_price!==undefined && (!Number.isFinite(Number(req.body.unit_price)) || Number(req.body.unit_price)<0)) return res.status(400).json({error:'Preço inválido'});
   const { quantity, unit_price, observations, status } = req.body || {};
@@ -469,6 +473,8 @@ pedidosRouter.patch('/:id', (req, res) => {
 
 pedidosRouter.delete('/:id', (req, res) => {
   const db = getDb(req);
+  const existing = db.prepare('SELECT c.locked AS comanda_locked FROM pedidos p JOIN comandas c ON c.id=p.comanda_id WHERE p.id=?').get(Number(req.params.id));
+  if (existing?.comanda_locked) return res.status(400).json({ error: 'Pedido bloqueado. Desbloqueie antes de excluir.' });
   db.prepare(
     "UPDATE pedidos SET status = ?, updated_at = datetime('now','localtime') WHERE id = ? AND paid_at IS NULL AND paid_quantity=0"
   ).run('cancelled', Number(req.params.id));

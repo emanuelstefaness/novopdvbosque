@@ -1,0 +1,360 @@
+/* Delivery / Pedir online (.public-app): tema CLARO original.
+   O PDV interno usa o tema escuro (tokens em :root); aqui os tokens voltam aos valores
+   do commit a339821 e as regras .public-* recuperam as cores brancas de antes.
+   Importado por último em App.jsx para vencer professional.css. */
+
+body:has(.public-app) {
+  background: #f4f6f8;
+  color: #233246;
+}
+
+.public-app {
+  --ink: #233246;
+  --muted: #728090;
+  --line: #e3e8ed;
+  --canvas: #f4f6f8;
+  --surface: #fff;
+  --surface-2: #f4f6f8;
+  --brand: #147568;
+  --brand-soft: #eaf4f1;
+  --navy: #20364d;
+  --radius: 8px;
+  color: #233246;
+}
+
+.public-app [class*="bg-gradient"] {
+  background-image: none;
+  background-color: #fff;
+}
+.public-app .public-menu {
+  background: #f5f7f8;
+}
+.public-menu > .sticky {
+  background: #203b39;
+  border-color: #203b39;
+}
+.public-menu [class*="text-red-600"] {
+  color: #147568;
+}
+.public-menu [class*="border-red-600"] {
+  border-color: #147568;
+}
+.public-menu main section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 20px;
+}
+.public-menu main [class*="group cursor-pointer"] {
+  padding: 20px 10px;
+  border-color: #edf1f4;
+}
+.public-menu main [class*="group cursor-pointer"]:hover {
+  background: #fafcfb;
+}
+
+/* === Regras globais restauradas do HEAD, restritas a .public-app (geradas) === */
+.public-app button:focus-visible,
+.public-app a:focus-visible {
+  outline: 3px solid #95cfc5;
+  outline-offset: 3px;
+}
+.public-app input:focus,
+.public-app select:focus,
+.public-app textarea:focus {
+  outline: 0;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px #14756815;
+}
+.public-app input:not([type="checkbox"]):not([type="radio"]),
+.public-app select,
+.public-app textarea {
+  border: 1px solid #d9e0e6;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  padding: 9px 12px;
+  min-height: 38px;
+  max-width: 100%;
+}
+.public-app .connection {
+  font-size: 11px;
+  color: #8894a0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.public-app .connection i {
+  width: 6px;
+  height: 6px;
+  background: #b79046;
+  border-radius: 50%;
+}
+.public-app .connection.connected {
+  color: #57806e;
+}
+.public-app .connection.connected i {
+  background: #2a9870;
+}
+.public-app .btn-primary,
+.public-app .btn-success {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+.public-app .btn-primary:hover,
+.public-app .btn-success:hover {
+  background: #105d53;
+}
+.public-app .btn-secondary {
+  background: #fff;
+  border: 1px solid #dce3e8;
+  color: #536476;
+}
+.public-app .btn-secondary:hover {
+  background: #f6f8f9;
+}
+.public-app .btn-danger {
+  color: #b43c40;
+  background: #fff1f1;
+  border-color: #f2d3d4;
+}
+.public-app .btn-info {
+  background: #ebf1f8;
+  color: #315b82;
+  border-color: #dbe5f0;
+}
+.public-app .icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 35px;
+  height: 35px;
+  border-radius: 6px;
+  color: #738291;
+  flex-shrink: 0;
+}
+.public-app .icon-button:hover {
+  background: #eaf0f3;
+}
+.public-app .text-danger {
+  color: #b74a50;
+  font-size: 12px;
+}
+.public-app .error-banner {
+  background: #fff0f0;
+  border: 1px solid #efcacc;
+  color: #a13940;
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 12px;
+  margin: 12px 0;
+}
+.public-app .notice-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #eaf4f1;
+  border: 1px solid #cae3dc;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  color: #17665a;
+}
+.public-app .segmented {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  background: #edf1f4;
+  border-radius: 7px;
+}
+.public-app .segmented button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 11px;
+  color: #7b8793;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.public-app .segmented button.selected {
+  background: #fff;
+  color: var(--ink);
+  border-color: #e0e5e9;
+  box-shadow: 0 1px 2px #172b4010;
+  font-weight: 600;
+}
+.public-app .count {
+  font-size: 10px;
+  border-radius: 4px;
+  background: #e5eaee;
+  padding: 1px 5px;
+  color: #687a88;
+}
+.public-app .search-field {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #dce3e8;
+  border-radius: 6px;
+  padding: 0 11px;
+  color: #a1abb5;
+  min-width: 180px;
+}
+.public-app .empty-panel {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 65px 24px;
+  background: #fff;
+  border: 1px dashed #d9e2e7;
+  border-radius: 8px;
+  color: #8b98a4;
+  text-align: center;
+  font-size: 12px;
+}
+.public-app .empty-panel h2 {
+  font-size: 16px;
+  color: #546779;
+  margin: 0;
+}
+.public-app .field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+  color: #5b6c7c;
+  margin-top: 16px;
+}
+.public-app .lane-empty {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  color: #a9b6c0;
+  font-size: 10px;
+}
+.public-app .drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #14283f55;
+  z-index: 80;
+  display: flex;
+  justify-content: flex-end;
+}
+.public-app .drawer-header h2 {
+  font-size: 23px;
+  margin: 0;
+  font-weight: 600;
+  color: #30495d;
+}
+.public-app .detail-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #9aa6b0;
+  font-size: 11px;
+}
+.public-app .state-badge.green {
+  background: #edf7f2;
+  color: #448971;
+}
+.public-app .state-badge.red {
+  background: #fff0f1;
+  color: #b55961;
+}
+.public-app .detail-section h3 {
+  font-size: 11px;
+  color: #9ba6b0;
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  margin: 0 0 12px;
+  font-weight: 500;
+}
+.public-app .detail-section > strong {
+  font-size: 13px;
+  color: #40596d;
+}
+.public-app .detail-section > p {
+  font-size: 12px;
+  color: #748697;
+  margin: 5px 0;
+}
+.public-app .quantity-badge {
+  background: #f0f4f6;
+  color: #627c8d;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+.public-app .detail-item small {
+  display: block;
+  font-size: 10px;
+  color: #8b99a5;
+  white-space: pre-wrap;
+}
+.public-app .detail-item > span:last-child {
+  font-size: 11px;
+  color: #506e80;
+}
+.public-app .detail-observation {
+  padding: 12px;
+  background: #fff9ec;
+  border: 1px solid #efe5cf;
+  border-radius: 6px;
+  margin-top: 20px;
+  font-size: 11px;
+  color: #947a45;
+}
+.public-app .detail-total strong {
+  font-size: 23px;
+  color: #294b5a;
+  font-weight: 650;
+}
+.public-app .cancel-box {
+  padding: 14px;
+  border: 1px solid #eacaca;
+  background: #fffafa;
+  border-radius: 6px;
+  margin-top: 15px;
+}
+.public-app .dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: #192d455c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.public-app .dialog-card {
+  width: 420px;
+  max-width: 100%;
+  background: #fff;
+  border-radius: 10px;
+  padding: 25px;
+  box-shadow: 0 20px 70px #102c4526;
+}
+.public-app .data-panel {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.public-app .production-subtitle {
+  font-size: 12px;
+  color: #8797a4;
+  margin: -3px 0 22px;
+}

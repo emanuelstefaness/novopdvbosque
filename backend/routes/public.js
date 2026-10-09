@@ -172,7 +172,7 @@ publicRouter.get('/menu', (req, res) => {
 publicRouter.post('/orders', async (req, res) => {
   try {
   if (!isPedidosOnlineAtivo()) {
-    return res.status(503).json({ error: MENSAGEM_ONLINE_FECHADO });
+    return res.status(503).json({ error: statusPedidosOnline().mensagem_fechado || MENSAGEM_ONLINE_FECHADO });
   }
   const db = getDb(req);
   if (!db) return res.status(500).json({ error: 'Banco de dados não disponível' });

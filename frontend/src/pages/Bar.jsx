@@ -1,9 +1,10 @@
+import '../production.css'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { getPedidosBar, setPedidoSectorStatus } from '../api'
 import { useSocket } from '../socket'
 import PedidoElapsed from '../components/PedidoElapsed'
 import {earliestCreatedAt} from '../utils/pedidoTime'
-import { barComandaColumnClass, comandaOnlineLabel, isTipoPedidoOnline, pedidoOnlineBannerModel } from '../utils/comandaOnlineVisual'
+import { comandaOnlineLabel, isTipoPedidoOnline } from '../utils/comandaOnlineVisual'
 import { observacaoParaProducao } from '../utils/productionObservations'
 
 /** Ordem dos cards = ordem de lançamento na fila (ver Churrasqueira.jsx). */
@@ -62,93 +63,68 @@ export default function Bar() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden">
-      <div className="mb-3 shrink-0">
-        <h1 className="text-xl font-bold text-slate-800">Bar</h1>
-      <p className="production-subtitle">Pedidos organizados por comanda e prioridade de preparo.</p>
-        <p className="text-sm text-slate-500">Caipirinhas, doses e drinks</p>
-      </div>
-      <div className="flex min-h-0 flex-1 flex-row gap-3 overflow-x-auto overflow-y-hidden pb-2">
-        {cards.map((card) => {
-          const tipoOn = card.items[0]?.comanda_tipo_online
-          const barBanner = pedidoOnlineBannerModel(tipoOn)
-          return (
-          <div
-            key={card.comanda_id}
-            className={barComandaColumnClass(tipoOn)}
-          >
-            {barBanner && (
-              <div className={barBanner.wrap}>
-                <p className={barBanner.titleClass}>{barBanner.title}</p>
-                <p className={barBanner.subtitleClass}>{barBanner.subtitle}</p>
-              </div>
-            )}
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
-              <div>
-                <span className="font-bold text-sm text-slate-800">
-                  Comanda {card.items[0]?.production_number || card.comanda_id}{card.items[0]?.production_number ? " (paga)" : ""} — Mesa {card.mesa}
-                  {isTipoPedidoOnline(tipoOn) && (
-                    <span className="ml-2 inline-block rounded-full bg-violet-200/90 px-2 py-0.5 text-[9px] font-black uppercase text-violet-900">
-                      Pedir online
-                    </span>
-                  )}
-                  {comandaOnlineLabel(tipoOn) && (
-                    <span className="ml-2 inline-block rounded-full bg-slate-200/90 px-2 py-0.5 text-[10px] font-bold text-slate-800">
-                      {comandaOnlineLabel(tipoOn)}
-                    </span>
-                  )}
-                </span>
-                {card.items[0]?.waiter_name && <span className="ml-2 text-slate-500 text-xs">Garçom: {card.items[0].waiter_name}</span>}
-                <div className="mt-0.5" title="Tempo desde o pedido mais antigo desta comanda na fila">
-                  <PedidoElapsed createdAt={earliestCreatedAt(card.items)} className="text-xs" />
-                </div>
-              </div>
-              <button
-                type="button"
-                className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-500"
-                onClick={() => setCardAllReady(card.items)}
-              >
-                Tudo pronto
-              </button>
-            </div>
-            <ul className="min-h-0 flex-1 space-y-2 overflow-auto">
-              {card.items.map((p) => {
-                const obsLinha = observacaoParaProducao(p.observations)
-                return (
-                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-100 px-2 py-1.5 text-sm text-slate-800">
-                  <span className="flex-1">
-                    <span className="flex flex-wrap items-baseline gap-x-2">
-                      <span>{p.quantity}x {p.item_name}</span>
-                      <PedidoElapsed createdAt={p.created_at} className="text-xs" />
-                    </span>
-                    {(p.caipirinha_base || p.caipirinha_picole || p.dose_accompaniment || obsLinha) && (
-                      <span className="block text-xs text-slate-500">
-                        {p.caipirinha_base && `Base: ${p.caipirinha_base}`}
-                        {p.caipirinha_picole && ' • Picolé'}
-                        {p.dose_accompaniment && ` • ${p.dose_accompaniment}`}
-                        {obsLinha && `${(p.caipirinha_base || p.caipirinha_picole || p.dose_accompaniment) ? ' • ' : ''}${obsLinha}`}
+    <div className="prod-page">
+      <div className="prod-main">
+        <div className="prod-head">
+          <h1 className="prod-title">Bar</h1>
+          <p className="prod-sub">Caipirinhas, doses e drinks — pedidos organizados por comanda.</p>
+          <span className="prod-count">{cards.length} {cards.length === 1 ? 'comanda na fila' : 'comandas na fila'}</span>
+        </div>
+        <div className="prod-board">
+          {cards.map((card) => {
+            const tipoOn = card.items[0]?.comanda_tipo_online
+            const modo = tipoOn === 'delivery' ? 'is-delivery' : tipoOn === 'retirada' ? 'is-retirada' : ''
+            const numero = card.items[0]?.production_number || card.comanda_id
+            return (
+              <section key={card.comanda_id} className={`prod-card ${modo}`}>
+                <div className="prod-card-head">
+                  <div>
+                    <h2 className="prod-card-title">
+                      Comanda {numero}{card.items[0]?.production_number ? ' (paga)' : ''} — Mesa {card.mesa}
+                    </h2>
+                    <div className="prod-card-meta">
+                      {isTipoPedidoOnline(tipoOn) && <span className={`prod-chip ${modo}`}>{comandaOnlineLabel(tipoOn)}</span>}
+                      {card.items[0]?.waiter_name && <span>Garçom: {card.items[0].waiter_name}</span>}
+                      <span title="Tempo desde o pedido mais antigo desta comanda na fila">
+                        <PedidoElapsed createdAt={earliestCreatedAt(card.items)} className="text-xs" />
                       </span>
-                    )}
-                  </span>
-                  <button
-                    type="button"
-                    className="shrink-0 rounded bg-green-600 px-2 py-0.5 text-xs text-white hover:bg-green-500"
-                    onClick={() => setReady(p.id)}
-                  >
-                    Pronto
-                  </button>
-                </li>
-                );
-              })}
-            </ul>
-          </div>
-          );
-        })}
+                    </div>
+                  </div>
+                  <button type="button" className="prod-btn" onClick={() => setCardAllReady(card.items)}>Tudo pronto</button>
+                </div>
+                <ul className="prod-items">
+                  {card.items.map((p) => {
+                    const obsLinha = observacaoParaProducao(p.observations)
+                    const detalhe = [
+                      p.caipirinha_base && `Base: ${p.caipirinha_base}`,
+                      p.caipirinha_picole && 'Picolé',
+                      p.dose_accompaniment,
+                      obsLinha,
+                    ].filter(Boolean).join(' • ')
+                    return (
+                      <li key={p.id} className="prod-item">
+                        <span className="prod-qty">{p.quantity}</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="prod-item-name">{p.item_name}</div>
+                          {detalhe && <div className="prod-item-note">{detalhe}</div>}
+                          <div className="prod-item-time">
+                            <PedidoElapsed createdAt={p.created_at} className="text-xs" />
+                            {p.launched_by && <span className="prod-by"> · por {p.launched_by}</span>}
+                          </div>
+                        </div>
+                        <div className="prod-actions">
+                          <button type="button" className="prod-btn is-small" onClick={() => setReady(p.id)}>Pronto</button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            )
+          })}
+        </div>
+        {cards.length === 0 && <p className="prod-empty">Nenhum pedido no momento.</p>}
       </div>
-      {cards.length === 0 && (
-        <p className="py-8 text-center text-slate-500">Nenhum pedido no momento.</p>
-      )}
     </div>
   )
 }
-

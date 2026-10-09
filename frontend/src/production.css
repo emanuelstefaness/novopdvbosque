@@ -1,0 +1,424 @@
+/* Telas de produção (Cozinha, Churrasqueira, Bar): layout em fluxo normal, sem posição fixa.
+   Usa os tokens do tema (--canvas, --surface, --brand...) definidos em professional.css. */
+
+.prod-page {
+  --prod-card: var(--surface, #212226);
+  --prod-card-2: var(--surface-2, #2a2c31);
+  --prod-line: var(--line, #33363c);
+  --prod-ink: var(--ink, #edeff2);
+  --prod-muted: var(--muted, #9aa3ac);
+  --prod-brand: var(--brand, #3ecf6e);
+  --prod-delivery: #4aa3e0;
+  --prod-retirada: #36c2b4;
+  --prod-warn: #e0a43a;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  color: var(--prod-ink);
+}
+.prod-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.prod-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-bottom: 16px;
+}
+.prod-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--prod-ink);
+}
+.prod-sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--prod-muted);
+}
+.prod-count {
+  margin-left: auto;
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--prod-line);
+  background: var(--prod-card);
+  color: var(--prod-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.prod-empty {
+  padding: 48px 0;
+  text-align: center;
+  color: var(--prod-muted);
+}
+
+/* Colunas de comanda */
+.prod-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.prod-card {
+  background: var(--prod-card);
+  border: 1px solid var(--prod-line);
+  border-top: 3px solid var(--prod-brand);
+  border-radius: 12px;
+  padding: 14px;
+  min-width: 0;
+}
+.prod-card.is-delivery { border-top-color: var(--prod-delivery); }
+.prod-card.is-retirada { border-top-color: var(--prod-retirada); }
+
+.prod-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.prod-card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--prod-ink);
+  line-height: 1.25;
+}
+.prod-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--prod-muted);
+}
+.prod-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--prod-card-2);
+  border: 1px solid var(--prod-line);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--prod-muted);
+}
+.prod-chip.is-delivery { color: var(--prod-delivery); }
+.prod-chip.is-retirada { color: var(--prod-retirada); }
+
+/* Itens */
+.prod-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.prod-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  background: var(--prod-card-2);
+  border: 1px solid var(--prod-line);
+  border-radius: 10px;
+}
+.prod-qty {
+  min-width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--brand-soft, #17351f);
+  color: var(--prod-brand);
+  font-size: 16px;
+  font-weight: 800;
+}
+.prod-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.prod-item-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--prod-warn);
+}
+.prod-item-note {
+  margin-top: 5px;
+  padding: 4px 8px;
+  border-left: 3px solid var(--prod-warn);
+  background: rgba(224, 164, 58, 0.1);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.prod-item-time {
+  margin-top: 2px;
+  font-size: 11px;
+}
+.prod-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.prod-btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--prod-brand);
+  color: #07210f;
+  white-space: nowrap;
+}
+.prod-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.prod-btn:disabled { opacity: 0.5; cursor: default; }
+.prod-btn.is-ghost {
+  background: transparent;
+  border: 1px solid var(--prod-line);
+  color: var(--prod-ink);
+  padding: 7px 10px;
+}
+.prod-btn.is-ghost:hover:not(:disabled) { background: var(--prod-card-2); }
+.prod-btn.is-small { padding: 5px 10px; font-size: 12px; }
+
+/* Painel "Total para produção" */
+.prod-side {
+  flex: 0 0 280px;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 160px);
+  display: flex;
+  flex-direction: column;
+  background: var(--prod-card);
+  border: 1px solid var(--prod-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.prod-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--prod-line);
+}
+.prod-side-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--prod-ink);
+}
+.prod-close {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--prod-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--prod-ink);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.prod-close:hover { background: var(--prod-card-2); }
+.prod-side-body {
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.prod-total-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 10px;
+  background: var(--prod-card-2);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.prod-total-row b {
+  font-size: 15px;
+  color: var(--prod-brand);
+  min-width: 22px;
+}
+.prod-total-row small {
+  display: block;
+  color: var(--prod-warn);
+  font-size: 11px;
+}
+.prod-total-pf {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--prod-line);
+}
+.prod-toggle {
+  position: sticky;
+  top: 12px;
+  align-self: flex-start;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 900px) {
+  .prod-page { flex-direction: column; }
+  .prod-side, .prod-toggle { position: static; flex-basis: auto; width: 100%; max-height: 50vh; }
+  .prod-count { margin-left: 0; }
+}
+
+/* Neutraliza regras globais de button (tamanho de toque / fonte grande) dentro das telas de produção */
+.prod-page .prod-btn {
+  min-width: 0;
+  min-height: 36px;
+  height: auto;
+  width: auto;
+  font-size: 13px;
+  line-height: 1.2;
+}
+.prod-page .prod-btn.is-small { font-size: 12px; }
+.prod-page .prod-close { min-width: 0; min-height: 0; font-size: 18px; }
+.prod-chip { color: var(--prod-ink, #edeff2); }
+
+/* Cozinha: grade de totais + lista de pedidos */
+.prod-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 14px;
+  background: var(--prod-card);
+  border: 1px solid var(--prod-line);
+  border-radius: 12px;
+}
+.prod-totals-title { grid-column: 1 / -1; margin: 0; font-size: 15px; font-weight: 700; }
+.prod-total-card {
+  padding: 10px 12px;
+  background: var(--prod-card-2);
+  border: 1px solid var(--prod-line);
+  border-radius: 10px;
+}
+.prod-total-card .num { display: block; font-size: 28px; font-weight: 800; line-height: 1.1; color: var(--prod-brand); }
+.prod-total-card .nome { font-size: 14px; font-weight: 600; }
+.prod-total-card ul {
+  list-style: none; margin: 8px 0 0; padding: 8px 0 0;
+  border-top: 1px solid var(--prod-line); font-size: 12px; color: var(--prod-muted);
+}
+.prod-total-card.is-pf .num { color: var(--prod-warn); }
+.prod-list { display: flex; flex-direction: column; gap: 8px; }
+.prod-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 10px 12px; background: var(--prod-card); border: 1px solid var(--prod-line);
+  border-left: 4px solid var(--prod-brand); border-radius: 10px;
+}
+.prod-row.is-delivery { border-left-color: var(--prod-delivery); }
+.prod-row.is-retirada { border-left-color: var(--prod-retirada); }
+.prod-row.is-pf { border-left-color: var(--prod-warn); }
+.prod-row-title { font-size: 15px; font-weight: 600; }
+.prod-row-title em { font-style: normal; color: var(--prod-brand); }
+.prod-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 3px; font-size: 12px; color: var(--prod-muted); }
+.prod-row-meta .warn { color: var(--prod-warn); }
+
+/* Quadro horizontal: cards lado a lado com rolagem lateral, sobre uma bandeja mais escura */
+.prod-board {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 16px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding: 14px;
+  background: #0f1012;
+  border: 1px solid var(--prod-line);
+  border-radius: 14px;
+  scroll-snap-type: x proximity;
+  scrollbar-color: #4a4f57 #0f1012;
+}
+.prod-board > .prod-card {
+  flex: 0 0 320px;
+  width: 320px;
+  scroll-snap-align: start;
+  background: linear-gradient(180deg, #2b3139 0%, #242830 100%);
+  border-color: #3d444e;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+.prod-board > .prod-card .prod-item {
+  background: #1c1f25;
+  border-color: #353b44;
+}
+.prod-board > .prod-card.is-delivery { background: linear-gradient(180deg, #243241 0%, #1f2a36 100%); }
+.prod-board > .prod-card.is-retirada { background: linear-gradient(180deg, #223a3a 0%, #1d302f 100%); }
+@media (max-width: 900px) {
+  .prod-board > .prod-card { flex-basis: 280px; width: 280px; }
+}
+
+/* Bandeja ocupa a altura da tela; cada card rola por dentro se tiver muitos itens */
+.prod-board {
+  align-items: stretch;
+  height: calc(100vh - 230px);
+  min-height: 360px;
+}
+.prod-board > .prod-card {
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+}
+.prod-board > .prod-card .prod-card-head { flex: 0 0 auto; }
+.prod-board > .prod-card .prod-items {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-color: #4a4f57 transparent;
+}
+
+/* Painel de total sobrepõe o quadro (não ocupa coluna); o quadro usa a largura toda */
+.prod-page { position: relative; }
+.prod-side {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 20;
+  flex: none;
+  width: 280px;
+  max-height: calc(100vh - 190px);
+  box-shadow: -8px 8px 28px rgba(0, 0, 0, 0.55);
+}
+.prod-head .prod-toggle { position: static; margin-left: 8px; }
+.prod-head .prod-toggle + .prod-count, .prod-head .prod-count + .prod-toggle { margin-left: 8px; }
+@media (max-width: 900px) {
+  .prod-side { position: static; width: 100%; }
+}
+
+/* Cabeçalho compacto nas telas de produção: mais espaço útil para os cards */
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) {
+  --prod-ribbon-h: 84px;
+}
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) .ribbon-top {
+  padding: 4px 16px;
+  gap: 12px;
+  border-bottom: 0;
+}
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) .ribbon-logo { width: 28px; height: 28px; }
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) .ribbon-tab { padding: 6px 12px; }
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) .ribbon-sub { padding: 0 16px 6px; gap: 4px; }
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) .ribbon-sub-item { padding: 5px 12px; }
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) .icon-button { width: 30px; height: 30px; }
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) .app-content { padding: 12px 16px 8px; }
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) .app-footer { display: none; }
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) .prod-head { margin-bottom: 10px; }
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) .prod-title { font-size: 19px; }
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) .prod-board {
+  height: calc(100vh - 168px);
+}
+.pdv-app-ribbon:has(:is(.page-cozinha, .page-churrasqueira, .page-bar)) .prod-side {
+  max-height: calc(100vh - 168px);
+}
+
+/* Quem lançou o item (nome informado pelo garçom no acesso) */
+.prod-by { color: var(--prod-ink); font-weight: 600; }

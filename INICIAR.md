@@ -1,8 +1,29 @@
 # Como iniciar o PDV Bosque
 
-## Iniciar tudo de uma vez (sistema local + cardápio web)
+## Iniciar o sistema (recomendado)
 
 **Dê dois cliques em:** `iniciar-pdv.bat`
+
+O script:
+1. Prepara o sistema na primeira vez (compila o frontend, ~10 segundos)
+2. Inicia **uma única janela** — "PDV Bosque - NAO FECHE" — com API e telas juntas
+3. Espera o sistema responder de verdade e só então abre o navegador
+
+- **Neste computador:** http://localhost:5173
+- **Garçons (celular):** http://IP-DO-PC:5173 — o mesmo endereço de antes
+
+Se algo ficar lento, a janela mostra linhas `[LENTO] horário MÉTODO /rota 1234ms`.
+O limite é 700 ms e pode ser mudado com `PDV_SLOW_MS`.
+
+**Depois de mudar o código do frontend**, rode `npm run build` na pasta `frontend` e reinicie.
+
+O modo antigo (servidor de desenvolvimento, só para programar) continua em `iniciar-pdv-dev.bat`.
+
+---
+
+## Modo desenvolvimento (antigo)
+
+**Dê dois cliques em:** `iniciar-pdv-dev.bat`
 
 Esse script:
 1. Abre o **backend** em uma janela (deixe aberta)

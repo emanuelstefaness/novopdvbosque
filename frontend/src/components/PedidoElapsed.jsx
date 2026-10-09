@@ -24,7 +24,7 @@ export default function PedidoElapsed({ createdAt, className = '' }) {
   const urgent = min >= 20
   return (
     <span
-      className={`tabular-nums ${urgent ? 'font-semibold text-red-600' : 'text-slate-500'} ${className}`}
+      className={`tabular-nums ${urgent ? 'font-semibold text-[#d11d1d]' : 'text-[#8f9db2]'} ${className}`}
       title={createdAt ? `Lançado: ${createdAt}` : undefined}
     >
       {text}

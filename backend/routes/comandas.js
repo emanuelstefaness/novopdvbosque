@@ -160,7 +160,7 @@ comandasRouter.post('/:id/open', (req, res) => {
     const { mesa, waiter_id } = req.body || {};
     const mesaStr = mesa != null ? String(mesa).trim() : '';
     if (!mesaStr) return res.status(400).json({ error: 'Número da mesa é obrigatório' });
-    const wid = waiter_id != null ? Number(waiter_id) : null;
+    const wid = waiter_id != null ? Number(waiter_id) : (req.user?.id ?? null);
     const existing = db.prepare('SELECT * FROM comandas WHERE id = ?').get(id);
     const jaEmAndamento = existing && isEmAndamentoStatus(existing.status);
 
@@ -195,7 +195,7 @@ comandasRouter.patch('/:id', (req, res) => {
     const exists = db.prepare('SELECT * FROM comandas WHERE id = ?').get(id);
     if (!exists) return res.status(404).json({ error: 'Comanda não encontrada' });
 
-    const { mesa, status, people_count, service_tax_percent, couvert_per_person, client_cpf } = req.body || {};
+    const { mesa, status, people_count, service_tax_percent, couvert_per_person, client_cpf, waiter_id, observation, locked } = req.body || {};
     if(creditFor(db,exists.session_key).total>0 && [people_count,service_tax_percent,couvert_per_person].some(x=>x!==undefined))return res.status(400).json({error:'Esta conta tem adiantamento; mantenha os valores até concluir o recebimento.'});
     if (status !== undefined && !['open','ordering','paying','closed'].includes(status)) return res.status(400).json({error:'Status inválido'});
     for (const [key,value] of Object.entries({people_count,service_tax_percent,couvert_per_person})) {
@@ -210,6 +210,9 @@ comandasRouter.patch('/:id', (req, res) => {
     if (service_tax_percent !== undefined) { updates.push('service_tax_percent = ?'); values.push(service_tax_percent); }
     if (couvert_per_person !== undefined) { updates.push('couvert_per_person = ?'); values.push(couvert_per_person); }
     if (client_cpf !== undefined) { updates.push('client_cpf = ?'); values.push(client_cpf); }
+    if (waiter_id !== undefined) { updates.push('waiter_id = ?'); values.push(waiter_id != null ? Number(waiter_id) : null); }
+    if (observation !== undefined) { updates.push('observation = ?'); values.push(observation != null && String(observation).trim() ? String(observation).trim() : null); }
+    if (locked !== undefined) { updates.push('locked = ?'); values.push(locked ? 1 : 0); }
     if (status === 'closed') {
       updates.push("closed_at = datetime('now','localtime')");
       if (mesa === undefined) {

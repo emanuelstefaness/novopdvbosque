@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getCategories, getItems, getEspetinhos, createPedido } from '../api'
+import Icon from './Icon'
 import {
   lancheComOpcionaisAdicionais,
   itemAceitaCebolaCaramelizada,
@@ -13,9 +14,9 @@ const DOSE_STANDALONE = new Set(['Red Bull', 'Coca-Cola 350ml'])
 const DOSE_ACCOMP = ['Gelo de coco']
 
 /**
- * Lançamento rápido no card de pagamento do caixa (sem ir à tela Garçom).
+ * Modal de lançamento rápido no card de pagamento do caixa (sem ir à tela Garçom).
  */
-export default function CaixaQuickAdd({ comandaId, comandaStatus, onItemAdded }) {
+export default function CaixaQuickAdd({ open, comandaId, comandaStatus, onClose, onItemAdded }) {
   const closed = String(comandaStatus || '').toLowerCase() === 'closed'
   const [categories, setCategories] = useState([])
   const [catId, setCatId] = useState(null)
@@ -23,19 +24,19 @@ export default function CaixaQuickAdd({ comandaId, comandaStatus, onItemAdded })
   const [items, setItems] = useState([])
   const [espetinhos, setEspetinhos] = useState([])
   const [search, setSearch] = useState('')
-  const [expanded, setExpanded] = useState(false)
   const [modal, setModal] = useState(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
   useEffect(() => {
+    if (!open) return
     getCategories().then((l) =>
       setCategories(
         l.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || String(a.name).localeCompare(String(b.name), 'pt-BR'))
       )
     )
     getEspetinhos().then(setEspetinhos)
-  }, [])
+  }, [open])
 
   useEffect(() => {
     if (!catId) {
@@ -120,33 +121,26 @@ export default function CaixaQuickAdd({ comandaId, comandaStatus, onItemAdded })
     void submit({ item })
   }
 
-  if (closed) return null
+  if (!open || closed) return null
 
   return (
-    <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/90 to-white p-4 shadow-sm">
-      <button
-        type="button"
-        onClick={() => setExpanded((e) => !e)}
-        className="flex w-full items-center justify-between text-left"
-      >
-        <span>
-          <span className="text-sm font-bold text-emerald-900">Lançar produtos</span>
-          <span className="ml-2 text-xs text-emerald-700/90">(caixa — sem ir em Garçom)</span>
-        </span>
-        <span className="text-emerald-700">{expanded ? '▾' : '▸'}</span>
-      </button>
-      {expanded && (
-        <div className="mt-3 space-y-3 border-t border-emerald-100 pt-3">
-          {err && <p className="text-xs text-red-600">{err}</p>}
-          <div className="flex flex-wrap gap-1.5">
+    <div className="quickadd-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="quickadd-dialog" role="dialog" aria-modal="true" aria-label="Adicionar produto">
+        <header>
+          <h3>Adicionar produto</h3>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Fechar">
+            <Icon name="close" size={18} />
+          </button>
+        </header>
+        <div className="quickadd-body">
+          {err && <p className="error-banner">{err}</p>}
+          <div className="quickadd-categories">
             {categories.map((c) => (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => pickCategory(c)}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
-                  catId === c.id ? 'bg-emerald-600 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'
-                }`}
+                className={`quickadd-category ${catId === c.id ? 'active' : ''}`}
               >
                 {c.name}
               </button>
@@ -154,57 +148,59 @@ export default function CaixaQuickAdd({ comandaId, comandaStatus, onItemAdded })
           </div>
           {catId && (
             <>
-              <input
-                type="search"
-                placeholder="Buscar produto…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400"
-              />
-              <ul className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-slate-100 bg-white p-1">
+              <label className="quickadd-search">
+                <Icon name="search" size={16} />
+                <input
+                  type="search"
+                  placeholder="Buscar produto…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  autoFocus
+                />
+              </label>
+              <ul className="quickadd-items">
                 {filteredItems.map((item) => (
                   <li key={item.id}>
                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => onItemClick(item)}
-                      className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-emerald-50 disabled:opacity-50"
                     >
-                      <span className="text-slate-800">{item.name}</span>
-                      <span className="shrink-0 text-xs text-slate-500">
+                      <span>{item.name}</span>
+                      <span className="quickadd-item-price">
                         {Number(item.price).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
                     </button>
                   </li>
                 ))}
-                {filteredItems.length === 0 && <li className="px-2 py-3 text-center text-xs text-slate-500">Nenhum item</li>}
+                {filteredItems.length === 0 && <li className="quickadd-empty">Nenhum item</li>}
               </ul>
             </>
           )}
         </div>
-      )}
+      </div>
 
       {modal?.step === 'meat' && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
-            <h4 className="font-semibold text-slate-800">{modal.item.name}</h4>
-            <p className="mt-1 text-xs text-slate-500">Ponto da carne</p>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-2xl border border-[#2b3036] bg-[#212226] p-5 shadow-xl">
+            <h4 className="font-semibold text-[#c5cedc]">{modal.item.name}</h4>
+            <p className="mt-1 text-xs text-[#8f9db2]">Ponto da carne</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {MEAT_POINTS.map((m) => (
                 <button
                   key={m}
                   type="button"
                   onClick={() => setModal({ ...modal, meat: m })}
-                  className={`rounded-lg px-3 py-2 text-sm ${modal.meat === m ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-800'}`}
+                  className={`rounded-lg px-3 py-2 text-sm ${modal.meat === m ? 'bg-[#ea9404] text-white' : 'bg-[#242a30] text-[#c5cedc]'}`}
                 >
                   {m}
                 </button>
               ))}
             </div>
             {lancheComOpcionaisAdicionais(modal.item, slug) && (
-              <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+              <div className="mt-3 space-y-2 border-t border-[#242a30] pt-3">
                 {itemAceitaCebolaCaramelizada(modal.item) && (
-                  <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-800">
+                  <label className="flex cursor-pointer items-start gap-2 text-sm text-[#c5cedc]">
                     <input
                       type="checkbox"
                       className="mt-0.5"
@@ -215,7 +211,7 @@ export default function CaixaQuickAdd({ comandaId, comandaStatus, onItemAdded })
                   </label>
                 )}
                 {itemAceitaHamburguerExtra(modal.item) && (
-                  <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-800">
+                  <label className="flex cursor-pointer items-start gap-2 text-sm text-[#c5cedc]">
                     <input
                       type="checkbox"
                       className="mt-0.5"
@@ -252,11 +248,11 @@ export default function CaixaQuickAdd({ comandaId, comandaStatus, onItemAdded })
       )}
 
       {(modal?.step === 'prato' || modal?.step === 'meat_pf') && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="flex max-h-[min(90vh,520px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-            <div className="border-b border-slate-100 p-4">
-              <h4 className="font-semibold text-slate-800">{modal.item.name}</h4>
-              <p className="text-xs text-slate-500">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="flex max-h-[min(90vh,520px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[#2b3036] bg-[#212226] shadow-xl">
+            <div className="border-b border-[#242a30] p-4">
+              <h4 className="font-semibold text-[#c5cedc]">{modal.item.name}</h4>
+              <p className="text-xs text-[#8f9db2]">
                 {modal.step === 'meat_pf' ? 'Ponto do espetinho do prato feito' : 'Escolha o espetinho do prato feito'}
               </p>
             </div>
@@ -266,7 +262,7 @@ export default function CaixaQuickAdd({ comandaId, comandaStatus, onItemAdded })
                   <li key={e.id}>
                     <button
                       type="button"
-                      className={`w-full rounded-lg px-3 py-2 text-left text-sm ${Number(modal.pfId) === e.id ? 'bg-amber-100 font-medium' : 'hover:bg-slate-50'}`}
+                      className={`w-full rounded-lg px-3 py-2 text-left text-sm ${Number(modal.pfId) === e.id ? 'bg-[#3e3b2b] font-medium' : 'hover:bg-[#21272c]'}`}
                       onClick={() => setModal({ ...modal, pfId: e.id })}
                     >
                       {e.name}
@@ -283,7 +279,7 @@ export default function CaixaQuickAdd({ comandaId, comandaStatus, onItemAdded })
                       key={m}
                       type="button"
                       onClick={() => setModal({ ...modal, meat: m })}
-                      className={`rounded-lg px-3 py-2 text-sm ${modal.meat === m ? 'bg-amber-500 text-white' : 'bg-slate-100'}`}
+                      className={`rounded-lg px-3 py-2 text-sm ${modal.meat === m ? 'bg-[#ea9404] text-white' : 'bg-[#242a30]'}`}
                     >
                       {m}
                     </button>
@@ -291,7 +287,7 @@ export default function CaixaQuickAdd({ comandaId, comandaStatus, onItemAdded })
                 </div>
               </div>
             )}
-            <div className="flex gap-2 border-t border-slate-100 p-4">
+            <div className="flex gap-2 border-t border-[#242a30] p-4">
               {modal.step === 'prato' ? (
                 <>
                   <button type="button" className="btn btn-secondary flex-1" onClick={() => setModal(null)} disabled={busy}>
@@ -340,17 +336,17 @@ export default function CaixaQuickAdd({ comandaId, comandaStatus, onItemAdded })
       )}
 
       {modal?.step === 'dose' && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
-            <h4 className="font-semibold text-slate-800">{modal.item.name}</h4>
-            <p className="mt-2 text-xs text-slate-500">Acompanhamento da dose</p>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-2xl border border-[#2b3036] bg-[#212226] p-5 shadow-xl">
+            <h4 className="font-semibold text-[#c5cedc]">{modal.item.name}</h4>
+            <p className="mt-2 text-xs text-[#8f9db2]">Acompanhamento da dose</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {DOSE_ACCOMP.map((d) => (
                 <button
                   key={d}
                   type="button"
                   onClick={() => setModal({ ...modal, dose: d })}
-                  className={`rounded-lg px-3 py-2 text-sm ${modal.dose === d ? 'bg-amber-500 text-white' : 'bg-slate-100'}`}
+                  className={`rounded-lg px-3 py-2 text-sm ${modal.dose === d ? 'bg-[#ea9404] text-white' : 'bg-[#242a30]'}`}
                 >
                   {d}
                 </button>

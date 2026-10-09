@@ -3,6 +3,11 @@ import { Router } from 'express';
 export const waitersRouter = Router();
 const getDb = (req) => req.app.get('db');
 
+waitersRouter.get('/', (req, res) => {
+  const db = getDb(req);
+  res.json(db.prepare('SELECT id, name FROM waiters ORDER BY name').all());
+});
+
 // Retorna ou cria garçom pelo nome (para identificação na sessão)
 waitersRouter.post('/by-name', (req, res) => {
   try {

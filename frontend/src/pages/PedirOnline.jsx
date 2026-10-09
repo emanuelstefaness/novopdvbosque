@@ -688,7 +688,7 @@ export default function PedirOnline() {
       <div className="sticky top-0 z-40 w-full border-b border-slate-800 bg-black shadow-lg">
         <header className="px-4 py-4 text-white">
           <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
-            <h1><img src="/logo-bosque-transparente.png" alt="Bosque da Carne" width="64" height="64" className="establishment-logo" /></h1>
+            <h1><img src="/logo-bosque-transparente-256.png" alt="Bosque da Carne" width="64" height="64" className="establishment-logo" /></h1>
             <div className="flex shrink-0 items-center gap-2">
               <Link to="/acompanhar" className="rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-medium">
                 Acompanhar

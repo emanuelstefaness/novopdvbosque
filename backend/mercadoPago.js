@@ -44,6 +44,7 @@ export async function createPixPayment({ orderId, valorTotal, nome, email }) {
   };
 
   const res = await fetch(`${MP_API}/v1/payments`, {
+    signal: AbortSignal.timeout(10000), // não deixa o pedido pendurado se a internet cair
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -70,6 +71,7 @@ export async function createPixPayment({ orderId, valorTotal, nome, email }) {
 export async function getPaymentStatus(paymentId) {
   const token = getAccessToken();
   const res = await fetch(`${MP_API}/v1/payments/${encodeURIComponent(paymentId)}`, {
+    signal: AbortSignal.timeout(10000),
     headers: { Authorization: `Bearer ${token}` },
   });
   const data = await res.json().catch(() => ({}));
@@ -85,6 +87,7 @@ export async function cancelPayment(paymentId) {
   try {
     const token = getAccessToken();
     await fetch(`${MP_API}/v1/payments/${encodeURIComponent(paymentId)}`, {
+      signal: AbortSignal.timeout(10000),
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
