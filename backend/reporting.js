@@ -76,3 +76,16 @@ export function soldItems(db, from, to) {
 }
 export const sumMoney = (rows, key) =>
   money(rows.reduce((s, r) => s + cents(r[key] || 0), 0));
+
+/** Taxa de entrega dos pedidos entregues no período: valor do pedido − soma dos itens (em centavos). */
+export function deliveryFeeCents(db, from, to) {
+  const rows = db
+    .prepare(
+      `SELECT o.valor_total AS total,
+        COALESCE((SELECT SUM(CAST(ROUND(oi.unit_price*100) AS INTEGER)*oi.quantity) FROM order_items oi WHERE oi.order_id=o.id),0) AS itens
+       FROM orders o
+       WHERE o.status='entregue' AND date(COALESCE(o.delivered_at,o.updated_at),'-1 hour') BETWEEN ? AND ?`,
+    )
+    .all(from, to);
+  return rows.reduce((n, r) => n + Math.max(0, cents(r.total || 0) - r.itens), 0);
+}

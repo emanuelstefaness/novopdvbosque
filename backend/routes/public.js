@@ -284,6 +284,8 @@ publicRouter.post('/orders', async (req, res) => {
   if (tipo === 'delivery') {
     valorTotal += getTaxaEntregaDelivery();
   }
+  // Soma de preços decimais em ponto flutuante (ex.: 3 × 19,90) deixa resíduos: grava sempre em centavos exatos.
+  valorTotal = Math.round((valorTotal + Number.EPSILON) * 100) / 100;
 
   const isPix = formaPg === 'pix';
   const orderStatusInicial = isPix ? 'aguardando_pagamento' : 'recebido';

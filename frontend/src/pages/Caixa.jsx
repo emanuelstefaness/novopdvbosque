@@ -864,12 +864,13 @@ export default function Caixa() {
               </div>
               <footer className="register-settlement">
                 <div className="register-breakdown">
-                  <span>Subtotal <strong>{cash(summary.subtotal)}</strong></span>
+                  {/* Subtotal = consumo SEM couvert; o couvert vem à parte, então Subtotal + Serviço + Couvert = Total */}
+                  <span>Subtotal <strong>{cash(Math.round((summary.subtotal - summary.couvert) * 100) / 100)}</strong></span>
                   <span>
                     (+) Serviço <strong>{cash(summary.serviceTax)}</strong>
                   </span>
                   {summary.couvert > 0 && (
-                    <span>Couvert <strong>{cash(summary.couvert)}</strong></span>
+                    <span>(+) Couvert <strong>{cash(summary.couvert)}</strong></span>
                   )}
                   {summary.paidTotal > 0 && (
                     <span>

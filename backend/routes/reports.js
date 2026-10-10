@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { resolveRange, receipts, soldItems, sumMoney } from "../reporting.js";
+import { resolveRange, receipts, soldItems, sumMoney, deliveryFeeCents } from "../reporting.js";
 import { money } from "../billing.js";
 export const reportsRouter = Router();
 reportsRouter.use((req, res, next) => {
@@ -33,16 +33,21 @@ reportsRouter.get("/faturamento", (req, res) => {
       Math.max(sessions.get(r.session_key) || 0, r.people_count || 0),
     );
   const totalPessoas = [...sessions.values()].reduce((s, v) => s + v, 0),
-    faturamento = sumMoney(rows, "total");
+    faturamento = sumMoney(rows, "total"),
+    // Pedido online não tem "pessoas": o ticket por pessoa considera só o que o salão faturou.
+    faturamentoSalao = sumMoney(rows.filter((r) => r.channel === "salon"), "total"),
+    faturamentoOnline = sumMoney(rows.filter((r) => r.channel === "online"), "total");
   res.json({
     ...req.range,
     faturamento,
+    faturamentoSalao,
+    faturamentoOnline,
     taxaServico: sumMoney(rows, "taxa_servico_valor"),
     couvert: sumMoney(rows, "couvert_valor"),
     comandasCount: sessions.size,
     totalPessoas,
     ticketMedio: sessions.size ? faturamento / sessions.size : 0,
-    ticketPorPessoa: totalPessoas ? faturamento / totalPessoas : 0,
+    ticketPorPessoa: totalPessoas ? faturamentoSalao / totalPessoas : 0,
     business_day_note:
       "Salão: pagamentos recebidos. Online: pedidos entregues. Dia operacional: 01:00 a 00:59. Couvert sem serviço.",
   });
@@ -72,13 +77,16 @@ reportsRouter.get("/itens-mais-vendidos", (req, res) =>
     ),
   ),
 );
-reportsRouter.get("/por-categoria", (req, res) =>
-  res.json(
-    groupedItems(req, "category_name")
-      .map((r) => ({ category_name: r.name, total: r.total_value }))
-      .sort((a, b) => b.total - a.total),
-  ),
-);
+reportsRouter.get("/por-categoria", (req, res) => {
+  const rows = groupedItems(req, "category_name").map((r) => ({
+    category_name: r.name,
+    total: r.total_value,
+  }));
+  // A taxa de entrega é receita do delivery: sem esta linha, a soma das categorias não fecha com o faturamento.
+  const fee = deliveryFeeCents(req.app.get("db"), req.range.from, req.range.to);
+  if (fee > 0) rows.push({ category_name: "Taxa de entrega", total: money(fee) });
+  res.json(rows.sort((a, b) => b.total - a.total));
+});
 reportsRouter.get("/churrasqueira", (req, res) => {
   const map = new Map();
   for (const r of soldItems(
