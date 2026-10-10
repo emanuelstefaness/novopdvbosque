@@ -151,3 +151,15 @@ test("Ícones: cada categoria tem ícone próprio e ele existe em Icon.jsx", () 
   // ícones que não fazem sentido para estas categorias (folha p/ acompanhamentos, taça de martini p/ caipirinha, etc.)
   for (const ruim of ["leaf", "bottle", "cocktail", "dessert", "bowl", "plate", "skewer", "burger"]) assert.ok(!usados.includes(ruim), ruim + " foi substituído");
 });
+
+// ---------- identidade visual ----------
+test("Padrão da logo atrás da meia-lua: arquivo existe, é PNG com transparência e o CSS o usa", () => {
+  const png = path.resolve(here, "../public/padrao-logo-bosque.png");
+  assert.ok(fs.existsSync(png), "arquivo do padrão ausente");
+  const b = fs.readFileSync(png);
+  assert.equal(b.subarray(1, 4).toString(), "PNG");
+  assert.equal(b[25], 6, "PNG RGBA (com transparência)");
+  assert.ok(b.length < 120 * 1024, "padrão leve (< 120 KB)");
+  const css = fs.readFileSync(path.resolve(here, "../src/pages/PedirOnline.css"), "utf8");
+  assert.ok(css.includes("padrao-logo-bosque.png"), "CSS referencia o padrão");
+});
