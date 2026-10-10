@@ -322,9 +322,9 @@
 .delivery-category-arc::before {
   content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
   background:url("/padrao-logo-bosque.png") center top / 118px auto repeat;
-  opacity:.42;
+  opacity:.34;
 }
 .delivery-category-orbit { z-index:1; }
 @media (max-width:560px) {
-  .delivery-category-arc::before { background-size:84px auto; opacity:.38; }
+  .delivery-category-arc::before { background-size:84px auto; opacity:.34; }
 }
