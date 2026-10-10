@@ -1,4 +1,5 @@
-const MP_API = 'https://api.mercadopago.com';
+// MP_API_BASE só é usado em testes/homologação (servidor simulado). Em produção fica o endereço oficial.
+const MP_API = (process.env.MP_API_BASE && String(process.env.MP_API_BASE).trim()) || 'https://api.mercadopago.com';
 
 function getAccessToken() {
   const token = process.env.MP_ACCESS_TOKEN && String(process.env.MP_ACCESS_TOKEN).trim();

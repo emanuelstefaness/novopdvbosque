@@ -7,6 +7,8 @@ import { isPedidosOnlineAtivo, statusPedidosOnline, MENSAGEM_ONLINE_FECHADO } fr
 import { createPixPayment, getPaymentStatus, cancelPayment } from '../mercadoPago.js';
 
 export const publicRouter = Router();
+/** Maior desconto por item que um combo pode aplicar (mesmo limite usado no cardápio online). */
+const DESCONTO_MAXIMO_COMBO = 0.15;
 const getDb = (req) => req.app.get('db');
 
 function normalizeTelefone(v) {
@@ -255,7 +257,10 @@ publicRouter.post('/orders', async (req, res) => {
     let unitPrice = listUnit;
     if (rawClient !== undefined && rawClient !== null && rawClient !== '') {
       const clientUnit = Number(rawClient);
-      if (Number.isFinite(clientUnit) && clientUnit > 0 && clientUnit <= listUnit + 0.02) {
+      // O combo é calculado no navegador (desconto de até 15% por item). O servidor aceita o preço
+      // enviado só dentro dessa faixa; fora dela (ex.: 0,01) cobra o preço de tabela.
+      const minUnit = Math.round(listUnit * (1 - DESCONTO_MAXIMO_COMBO) * 100) / 100 - 0.01;
+      if (Number.isFinite(clientUnit) && clientUnit >= minUnit && clientUnit > 0 && clientUnit <= listUnit + 0.02) {
         unitPrice = Math.round(clientUnit * 100) / 100;
       }
     }
