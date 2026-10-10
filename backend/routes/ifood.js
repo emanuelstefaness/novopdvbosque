@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { importarPedidoIfood, pedidoIfoodDeExemplo, ifoodConfigurado, estadoIfood } from '../ifood.js';
+import { importarPedidoIfood, pedidoIfoodDeExemplo, ifoodConfigurado, estadoIfood, criarClienteIfood } from '../ifood.js';
 
 export const ifoodRouter = Router();
 const getDb = (req) => req.app.get('db');
@@ -68,4 +68,17 @@ ifoodRouter.put('/mapa', (req, res) => {
     ON CONFLICT(external_key) DO UPDATE SET item_id = excluded.item_id, auto_created = 0, updated_at = datetime('now','localtime')
   `).run(key, itemId);
   res.json({ ok: true });
+});
+
+// Motivos de cancelamento aceitos pelo iFood para um pedido (a tela de cancelar deve exibi-los).
+ifoodRouter.get('/pedidos/:id/motivos-cancelamento', async (req, res) => {
+  const o = getDb(req).prepare("SELECT external_id FROM orders WHERE id = ? AND origem = 'ifood'").get(Number(req.params.id));
+  if (!o) return res.status(404).json({ error: 'Pedido do iFood não encontrado' });
+  if (!ifoodConfigurado()) return res.status(503).json({ error: 'Integração com o iFood não configurada' });
+  try {
+    const cliente = criarClienteIfood({ clientId: process.env.IFOOD_CLIENT_ID, clientSecret: process.env.IFOOD_CLIENT_SECRET, baseUrl: process.env.IFOOD_API_BASE || undefined });
+    res.json(await cliente.motivosCancelamento(o.external_id));
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
 });

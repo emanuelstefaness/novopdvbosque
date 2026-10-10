@@ -177,6 +177,12 @@ function apiFalsa() {
     assert.equal(opts.headers.Authorization, "Bearer tok");
     if (path.endsWith("/events:polling")) return estado.eventos.length ? json(200, estado.eventos) : { ok: true, status: 204, text: async () => "" };
     if (path.endsWith("/acknowledgment")) { estado.acks.push(...JSON.parse(opts.body).map((e) => e.id)); return json(202, null); }
+    if (path.endsWith("/cancellationReasons")) return json(200, [{ cancelCodeId: "501", description: "PROBLEMAS DE SISTEMA" }]);
+    if (path.endsWith("/requestCancellation")) {
+      estado.cancelamentos = estado.cancelamentos || [];
+      estado.cancelamentos.push(JSON.parse(opts.body));
+      return json(202, null);
+    }
     const m = path.match(/\/orders\/([^/]+)(?:\/(\w+))?$/);
     if (m && m[2]) { estado.acoes.push([m[1], m[2]]); return json(202, null); }
     if (m) return estado.pedidos.has(m[1]) ? json(200, estado.pedidos.get(m[1])) : json(404, {});
@@ -230,6 +236,82 @@ test("13. Rotas: só o caixa acessa; simular cria pedido; status informa pendên
   assert.ok(st.pedidos_hoje >= 1);
   const ruim = await call("/ifood/pedidos", "POST", { id: "sem-itens", items: [] });
   assert.equal(ruim.status, 400);
+});
+
+test("14. Exibe bandeira do cartão, cupom (quem paga), código de coleta e CPF na nota", () => {
+  const r = ifood.importarPedidoIfood(db, pedido({
+    delivery: { deliveryAddress: { streetName: "Rua B", streetNumber: "5", neighborhood: "Centro" }, observations: "Deixar na portaria", pickupCode: "4821" },
+    customer: { name: "Bia", phone: { number: "41977776666" }, documentNumber: "123.456.789-09" },
+    benefits: [{ value: 10, sponsorshipValues: [{ name: "IFOOD", value: 6 }, { name: "MERCHANT", value: 4 }] }],
+    payments: { prepaid: 0, pending: 50, methods: [{ method: "CREDIT", type: "OFFLINE", value: 50, prepaid: false, card: { brand: "VISA" } }] },
+  }), { avisar: false });
+  const o = db.prepare("SELECT observacoes FROM orders WHERE id = ?").get(r.orderId).observacoes;
+  assert.ok(o.includes("COBRAR NA ENTREGA: CREDIT VISA R$ 50,00"), o);
+  assert.ok(o.includes("CUPOM -R$ 10,00 (paga: iFood R$ 6,00 + Loja R$ 4,00)"), o);
+  assert.match(o, /CÓDIGO DE COLETA: 4821/);
+  assert.match(o, /ENTREGA: Deixar na portaria/);
+  assert.ok(o.includes("CPF/CNPJ na nota: 123.456.789-09"), o);
+});
+
+test("15. Status feitos por outro sistema (RTP/DSP/CON) são acompanhados, sem voltar etapa", async () => {
+  const api = apiFalsa();
+  const p = pedido();
+  ifood.importarPedidoIfood(db, p, { avisar: false });
+  api.estado.eventos = [{ id: "a", code: "DSP", orderId: p.id }, { id: "b", code: "RTP", orderId: p.id }];
+  const cli = ifood.criarClienteIfood({ clientId: "a", clientSecret: "b", baseUrl: "http://ifood.test", fetchImpl: api.fetchImpl });
+  await ifood.processarEventosIfood(db, cli);
+  assert.equal(db.prepare("SELECT status FROM orders WHERE external_id = ?").get(p.id).status, "saiu_entrega", "RTP depois de DSP não volta etapa");
+  api.estado.eventos = [{ id: "c", code: "CON", orderId: p.id }];
+  await ifood.processarEventosIfood(db, cli);
+  const o = db.prepare("SELECT status, delivered_at FROM orders WHERE external_id = ?").get(p.id);
+  assert.equal(o.status, "entregue");
+  assert.ok(o.delivered_at);
+});
+
+test("16. Se a confirmação falhar, o evento não é confirmado e volta no próximo ciclo (SLA de 8 min)", async () => {
+  const api = apiFalsa();
+  const p = pedido();
+  api.estado.pedidos.set(p.id, p);
+  api.estado.eventos = [{ id: "e1", code: "PLC", orderId: p.id }];
+  const base = api.fetchImpl;
+  let falhar = true;
+  const fetchImpl = async (u, o) => (falhar && String(u).endsWith("/confirm") ? { ok: false, status: 503, text: async () => "" } : base(u, o));
+  const cli = ifood.criarClienteIfood({ clientId: "a", clientSecret: "b", baseUrl: "http://ifood.test", fetchImpl });
+  const r1 = await ifood.processarEventosIfood(db, cli);
+  assert.equal(r1.confirmados, 0);
+  falhar = false;
+  const r2 = await ifood.processarEventosIfood(db, cli);
+  assert.equal(r2.confirmados, 1);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM orders WHERE external_id = ?").get(p.id).n, 1, "reimportar não duplica");
+});
+
+test("17. Cancelar no PDV pede o cancelamento ao iFood com um código de motivo válido", async () => {
+  const api = apiFalsa();
+  const cli = ifood.criarClienteIfood({ clientId: "a", clientSecret: "b", baseUrl: "http://ifood.test", fetchImpl: api.fetchImpl });
+  const cod = await ifood.cancelarNoIfood(cli, "abc", { motivo: "Sem estoque" });
+  assert.equal(cod, "501");
+  assert.deepEqual(api.estado.cancelamentos[0], { reason: "Sem estoque", cancellationCode: "501" });
+});
+
+test("18. Saiu para entrega sem 'pronto' antes envia readyToPickup primeiro; token só renova no 401", async () => {
+  const api = apiFalsa();
+  let primeiro401 = true;
+  const base = api.fetchImpl;
+  const fetchImpl = async (u, o) => {
+    if (primeiro401 && String(u).includes("/orders/")) { primeiro401 = false; return { ok: false, status: 401, text: async () => "" }; }
+    return base(u, o);
+  };
+  const cli = ifood.criarClienteIfood({ clientId: "a", clientSecret: "b", baseUrl: "http://ifood.test", fetchImpl });
+  await cli.avisarStatus("zzz", "saiu_entrega");
+  assert.deepEqual(api.estado.acoes.map((a) => a[1]), ["readyToPickup", "dispatch"]);
+  assert.equal(api.estado.tokens, 2, "renovou uma vez, após o 401");
+});
+
+test("19. Acknowledgment em lotes de no máximo 2000 ids", async () => {
+  const api = apiFalsa();
+  const cli = ifood.criarClienteIfood({ clientId: "a", clientSecret: "b", baseUrl: "http://ifood.test", fetchImpl: api.fetchImpl });
+  await cli.confirmarEventos(Array.from({ length: 4500 }, (_, i) => "id" + i));
+  assert.equal(api.estado.acks.length, 4500);
 });
 
 test.after(() => server.close());

@@ -76,12 +76,34 @@ function textoPagamento(order) {
   if (metodos.length === 0) return '';
   const linhas = metodos.map((m) => {
     const valor = Number(m.value) || 0;
-    const nome = m.method || m.type || 'pagamento';
+    const bandeira = m.card?.brand ? ` ${m.card.brand}` : '';
+    const nome = `${m.method || m.type || 'pagamento'}${bandeira}`;
     if (m.prepaid) return `PAGO NO IFOOD (${nome})`;
     const troco = m.cash?.changeFor ? ` — troco para R$ ${Number(m.cash.changeFor).toFixed(2).replace('.', ',')}` : '';
     return `COBRAR NA ENTREGA: ${nome} R$ ${valor.toFixed(2).replace('.', ',')}${troco}`;
   });
   return linhas.join(' | ');
+}
+
+/** Cupons/descontos do pedido e quem arca com o custo (iFood ou Loja). */
+function textoCupons(order) {
+  const beneficios = Array.isArray(order.benefits) ? order.benefits : [];
+  return beneficios
+    .map((b) => {
+      const valor = Number(b.value) || 0;
+      if (!valor) return '';
+      const quem = (Array.isArray(b.sponsorshipValues) ? b.sponsorshipValues : [])
+        .map((sv) => `${String(sv.name || '').toUpperCase() === 'MERCHANT' ? 'Loja' : 'iFood'} R$ ${Number(sv.value || 0).toFixed(2).replace('.', ',')}`)
+        .join(' + ');
+      return `CUPOM -R$ ${valor.toFixed(2).replace('.', ',')}${quem ? ` (paga: ${quem})` : ''}`;
+    })
+    .filter(Boolean)
+    .join(' | ');
+}
+
+function textoDocumento(order) {
+  const doc = order.customer?.documentNumber || order.customer?.taxPayerIdentificationNumber || order.taxPayerIdentificationNumber;
+  return doc ? `CPF/CNPJ na nota: ${doc}` : '';
 }
 
 function observacoesDoItem(it) {
@@ -130,7 +152,10 @@ export function importarPedidoIfood(db, order, { avisar = true } = {}) {
   const obsPedido = [
     `iFood #${ref}`,
     textoPagamento(order),
-    order.delivery?.observations,
+    textoCupons(order),
+    order.delivery?.pickupCode ? `CÓDIGO DE COLETA: ${order.delivery.pickupCode}` : '',
+    order.delivery?.observations ? `ENTREGA: ${order.delivery.observations}` : '',
+    textoDocumento(order),
     order.extraInfo,
   ].filter(Boolean).join(' · ');
 
@@ -224,9 +249,10 @@ const ACAO_POR_STATUS = {
 export function criarClienteIfood({ clientId, clientSecret, baseUrl = IFOOD_API_BASE, fetchImpl = fetch } = {}) {
   let token = null;
   let expira = 0;
+  const prontos = new Set();
 
   async function autenticar() {
-    if (token && Date.now() < expira - 60_000) return token;
+    if (token && Date.now() < expira) return token;
     const r = await fetchImpl(`${baseUrl}/authentication/v1.0/oauth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -239,14 +265,22 @@ export function criarClienteIfood({ clientId, clientSecret, baseUrl = IFOOD_API_
     return token;
   }
 
-  async function chamar(caminho, opcoes = {}) {
+  async function chamar(caminho, opcoes = {}, tentouRenovar = false) {
     const t = await autenticar();
     const r = await fetchImpl(`${baseUrl}${caminho}`, {
       ...opcoes,
       headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json', ...(opcoes.headers || {}) },
     });
+    if (r.status === 401 && !tentouRenovar) {
+      token = null; // token expirado/revogado: renova uma vez
+      return chamar(caminho, opcoes, true);
+    }
     if (r.status === 204) return null;
-    if (!r.ok) throw new Error(`iFood ${caminho} ${r.status}`);
+    if (!r.ok) {
+      const erro = new Error(`iFood ${caminho} ${r.status}`);
+      erro.status = r.status;
+      throw erro;
+    }
     const texto = await r.text();
     return texto ? JSON.parse(texto) : null;
   }
@@ -254,13 +288,30 @@ export function criarClienteIfood({ clientId, clientSecret, baseUrl = IFOOD_API_
   return {
     autenticar,
     eventos: async () => (await chamar('/events/v1.0/events:polling')) || [],
-    confirmarEventos: (ids) =>
-      ids.length ? chamar('/events/v1.0/events/acknowledgment', { method: 'POST', body: JSON.stringify(ids.map((id) => ({ id }))) }) : null,
+    confirmarEventos: async (ids) => {
+      for (let i = 0; i < ids.length; i += 2000) {
+        await chamar('/events/v1.0/events/acknowledgment', {
+          method: 'POST',
+          body: JSON.stringify(ids.slice(i, i + 2000).map((id) => ({ id }))),
+        });
+      }
+    },
+    motivosCancelamento: (id) => chamar(`/order/v1.0/orders/${encodeURIComponent(id)}/cancellationReasons`),
+    cancelar: (id, codigo, motivo) =>
+      chamar(`/order/v1.0/orders/${encodeURIComponent(id)}/requestCancellation`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: String(motivo || 'Cancelado pelo restaurante').slice(0, 200), cancellationCode: String(codigo) }),
+      }),
     pedido: (id) => chamar(`/order/v1.0/orders/${encodeURIComponent(id)}`),
     acao: (id, acao) => chamar(`/order/v1.0/orders/${encodeURIComponent(id)}/${acao}`, { method: 'POST' }),
     avisarStatus: async (externalId, statusPdv) => {
       const acao = ACAO_POR_STATUS[statusPdv];
       if (!acao) return false;
+      // Entrega própria: o iFood exige "pronto" antes de "saiu para entrega".
+      if (acao === 'dispatch' && !prontos.has(externalId)) {
+        await chamar(`/order/v1.0/orders/${encodeURIComponent(externalId)}/readyToPickup`, { method: 'POST' }).catch(() => {});
+      }
+      if (acao === 'readyToPickup') prontos.add(externalId);
       await chamar(`/order/v1.0/orders/${encodeURIComponent(externalId)}/${acao}`, { method: 'POST' });
       return true;
     },
@@ -268,6 +319,21 @@ export function criarClienteIfood({ clientId, clientSecret, baseUrl = IFOOD_API_
 }
 
 export const estadoIfood = { ultimoPolling: null, ultimoErro: null, importados: 0 };
+
+const STATUS_POR_EVENTO = { RTP: 'pronto', DSP: 'saiu_entrega', CON: 'entregue' };
+const ORDEM_STATUS = ['recebido', 'em_producao', 'pronto', 'saiu_entrega', 'entregue'];
+
+/** Outro sistema (ou o portal do iFood) mudou o status: o PDV acompanha, sem voltar etapas nem tocar em cancelados. */
+export function sincronizarStatusIfood(db, externalId, novo) {
+  const o = db.prepare("SELECT id, status FROM orders WHERE origem = 'ifood' AND external_id = ?").get(String(externalId));
+  if (!o || o.status === 'cancelado' || o.status === 'entregue') return false;
+  if (ORDEM_STATUS.indexOf(novo) <= ORDEM_STATUS.indexOf(o.status)) return false;
+  db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(novo, o.id);
+  if (novo === 'entregue') db.prepare("UPDATE orders SET delivered_at = COALESCE(delivered_at, datetime('now','localtime')) WHERE id = ?").run(o.id);
+  broadcastAll('orders', {});
+  broadcastAll('comandas', {});
+  return true;
+}
 
 /** Uma rodada: baixa os eventos, importa pedidos novos, aplica cancelamentos e confirma tudo. */
 export async function processarEventosIfood(db, cliente) {
@@ -279,10 +345,15 @@ export async function processarEventosIfood(db, cliente) {
       if (ev.code === 'PLC' && orderId) {
         const pedido = await cliente.pedido(orderId);
         const r = importarPedidoIfood(db, pedido);
-        if (!r.duplicado) {
-          estadoIfood.importados += 1;
-          cliente.acao(orderId, 'confirm').catch(() => {});
+        if (!r.duplicado) estadoIfood.importados += 1;
+        // O iFood exige confirmar em até 8 minutos. Se falhar, o evento não é confirmado e volta no próximo ciclo.
+        try {
+          await cliente.acao(orderId, 'confirm');
+        } catch (e) {
+          if (![400, 409, 422].includes(e.status)) throw e; // já confirmado por outro caminho
         }
+      } else if (STATUS_POR_EVENTO[ev.code] && orderId) {
+        sincronizarStatusIfood(db, orderId, STATUS_POR_EVENTO[ev.code]);
       } else if ((ev.code === 'CAN' || ev.code === 'CANCELLED') && orderId) {
         cancelarPedidoIfood(db, orderId);
       }
@@ -350,4 +421,16 @@ export function pedidoIfoodDeExemplo(db) {
     total: { subTotal: subtotal, deliveryFee: 6, orderAmount: subtotal + 6 },
     payments: { prepaid: 0, pending: subtotal + 6, methods: [{ method: 'CASH', type: 'OFFLINE', value: subtotal + 6, prepaid: false, cash: { changeFor: 100 } }] },
   };
+}
+
+/** Cancela no iFood um pedido cancelado no PDV. Sem código informado, usa o primeiro motivo aceito pelo iFood. */
+export async function cancelarNoIfood(cliente, externalId, { codigo, motivo } = {}) {
+  let cod = codigo;
+  if (!cod) {
+    const motivos = await cliente.motivosCancelamento(externalId);
+    cod = motivos?.[0]?.cancelCodeId ?? motivos?.[0]?.code;
+    if (!cod) throw new Error('iFood não devolveu motivos de cancelamento');
+  }
+  await cliente.cancelar(externalId, cod, motivo);
+  return cod;
 }
