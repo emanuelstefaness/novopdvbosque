@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { categoryArcStyle, categoryArcPoint } from "../src/utils/categoryArc.js";
 import { buildCombos, comboUnitPrices, COMBO_MAX_DISCOUNT_PERCENT, COMBO_MAX_SAVINGS } from "../src/utils/deliveryCombos.js";
 import { itemImageSlug } from "../src/utils/itemImageSlug.js";
+import { CATEGORY_ICON_BY_SLUG } from "../src/utils/categoryIcons.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const norm = (v) => String(v || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -133,4 +134,20 @@ test("Imagens: cobertura dos itens do cardápio (lista o que falta)", async () =
   console.log(`# imagens: ${have.size} arquivos; itens sem foto: ${missing.length}${missing.length ? " -> " + missing.join(", ") : ""}`);
   // Informativo: não reprova enquanto as fotos novas ainda estão sendo geradas.
   assert.ok(Array.isArray(missing));
+});
+
+// ---------- ícones da meia-lua ----------
+test("Ícones: cada categoria tem ícone próprio e ele existe em Icon.jsx", () => {
+  const iconSrc = fs.readFileSync(path.resolve(here, "../src/components/Icon.jsx"), "utf8");
+  const arcSlugs = ["bebidas", "pratos", "porcoes", "espetinhos", "lanches", "acompanhamentos", "sobremesas", "caipirinhas"];
+  const usados = [];
+  for (const slug of arcSlugs) {
+    const icon = CATEGORY_ICON_BY_SLUG[slug];
+    assert.ok(icon, "sem ícone para " + slug);
+    assert.ok(new RegExp("\\b" + icon + ":\\s*\"").test(iconSrc), "ícone " + icon + " não existe em Icon.jsx");
+    usados.push(icon);
+  }
+  assert.equal(new Set(usados).size, usados.length, "dois ícones iguais na meia-lua");
+  // ícones que não fazem sentido para estas categorias (folha p/ acompanhamentos, taça de martini p/ caipirinha, etc.)
+  for (const ruim of ["leaf", "bottle", "cocktail", "dessert", "bowl", "plate", "skewer", "burger"]) assert.ok(!usados.includes(ruim), ruim + " foi substituído");
 });

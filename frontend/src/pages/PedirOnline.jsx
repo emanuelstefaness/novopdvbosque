@@ -17,6 +17,7 @@ import './PedirOnline.css'
 import { categoryArcStyle, categoryArcSide } from '../utils/categoryArc'
 import { buildCombos, comboUnitPrices } from '../utils/deliveryCombos'
 import { itemImageSlug } from '../utils/itemImageSlug'
+import { CATEGORY_ICON_BY_SLUG } from '../utils/categoryIcons'
 
 const API = getApiBase()
 /** Fallback se a API ainda não devolveu a taxa (backend antigo). */
@@ -111,16 +112,6 @@ const normalize = (v) => String(v || '').toLowerCase().normalize('NFD').replace(
 const bySort = (a, b) => (a.sort_order || 0) - (b.sort_order || 0)
 
 const slugOrder = ['espetinhos', 'lanches', 'pratos', 'porcoes']
-const CATEGORY_ICON_BY_SLUG = {
-  espetinhos: 'skewer',
-  lanches: 'burger',
-  pratos: 'plate',
-  porcoes: 'bowl',
-  acompanhamentos: 'leaf',
-  sobremesas: 'dessert',
-  bebidas: 'bottle',
-  caipirinhas: 'cocktail',
-}
 
 function isPratoFeitoItem(item) {
   if (!item) return false
