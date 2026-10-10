@@ -234,6 +234,17 @@ export function cancelarPedidoIfood(db, externalId, motivo = 'Cancelado no iFood
 
 // ───────────────────────── Cliente da API ─────────────────────────
 
+/**
+ * Modo de operação:
+ * - 'portal' (padrão): o aceite e as etapas ficam no portal/aplicativo do iFood. O PDV só RECEBE: o pedido aparece
+ *   na produção quando é aceito lá (evento CFM) e acompanha os status que mudarem no iFood.
+ * - 'integrado': o PDV confirma o pedido ao recebê-lo e envia preparo/pronto/despacho/cancelamento ao iFood
+ *   (necessário para homologar a integração).
+ */
+export function modoIfood(env = process.env) {
+  return String(env.IFOOD_MODO || '').toLowerCase() === 'integrado' ? 'integrado' : 'portal';
+}
+
 export function ifoodConfigurado(env = process.env) {
   return Boolean(env.IFOOD_CLIENT_ID && env.IFOOD_CLIENT_SECRET);
 }
@@ -336,13 +347,17 @@ export function sincronizarStatusIfood(db, externalId, novo) {
 }
 
 /** Uma rodada: baixa os eventos, importa pedidos novos, aplica cancelamentos e confirma tudo. */
-export async function processarEventosIfood(db, cliente) {
+export async function processarEventosIfood(db, cliente, { modo = modoIfood() } = {}) {
   const eventos = await cliente.eventos();
   const reconhecer = [];
   for (const ev of eventos) {
     try {
       const orderId = ev.orderId;
-      if (ev.code === 'PLC' && orderId) {
+      if (ev.code === 'CFM' && orderId) {
+        // Aceito (no portal ou por outro sistema): entra na produção. Idempotente.
+        const r = importarPedidoIfood(db, await cliente.pedido(orderId));
+        if (!r.duplicado) estadoIfood.importados += 1;
+      } else if (ev.code === 'PLC' && orderId && modo === 'integrado') {
         const pedido = await cliente.pedido(orderId);
         const r = importarPedidoIfood(db, pedido);
         if (!r.duplicado) estadoIfood.importados += 1;

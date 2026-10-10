@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { importarPedidoIfood, pedidoIfoodDeExemplo, ifoodConfigurado, estadoIfood, criarClienteIfood } from '../ifood.js';
+import { importarPedidoIfood, pedidoIfoodDeExemplo, ifoodConfigurado, estadoIfood, criarClienteIfood, modoIfood } from '../ifood.js';
 
 export const ifoodRouter = Router();
 const getDb = (req) => req.app.get('db');
@@ -16,6 +16,7 @@ ifoodRouter.get('/status', (req, res) => {
   const naoMapeados = db.prepare('SELECT COUNT(*) AS n FROM ifood_item_map WHERE auto_created = 1').get().n;
   res.json({
     configurado: ifoodConfigurado(),
+    modo: modoIfood(),
     ultimo_polling: estadoIfood.ultimoPolling,
     ultimo_erro: estadoIfood.ultimoErro,
     importados_nesta_sessao: estadoIfood.importados,

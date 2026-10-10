@@ -197,11 +197,11 @@ test("10. Polling: importa pedido novo, confirma o evento e reaproveita o token"
   api.estado.pedidos.set(p.id, p);
   api.estado.eventos = [{ id: "ev1", code: "PLC", orderId: p.id }, { id: "ev2", code: "KEEPALIVE" }];
   const cli = ifood.criarClienteIfood({ clientId: "a", clientSecret: "b", baseUrl: "http://ifood.test", fetchImpl: api.fetchImpl });
-  const r = await ifood.processarEventosIfood(db, cli);
+  const r = await ifood.processarEventosIfood(db, cli, { modo: "integrado" });
   assert.deepEqual(r, { eventos: 2, confirmados: 2 });
   assert.deepEqual(api.estado.acks, ["ev1", "ev2"]);
   assert.ok(db.prepare("SELECT 1 FROM orders WHERE external_id = ?").get(p.id));
-  await ifood.processarEventosIfood(db, cli);
+  await ifood.processarEventosIfood(db, cli, { modo: "integrado" });
   assert.equal(api.estado.tokens, 1, "token reaproveitado");
   await new Promise((r2) => setTimeout(r2, 20));
   assert.ok(api.estado.acoes.some(([id, a]) => id === p.id && a === "confirm"), "pedido confirmado no iFood");
@@ -213,7 +213,7 @@ test("11. Polling: evento CAN cancela; evento com falha não é confirmado (volt
   ifood.importarPedidoIfood(db, p, { avisar: false });
   api.estado.eventos = [{ id: "c1", code: "CAN", orderId: p.id }, { id: "f1", code: "PLC", orderId: "nao-existe" }];
   const cli = ifood.criarClienteIfood({ clientId: "a", clientSecret: "b", baseUrl: "http://ifood.test", fetchImpl: api.fetchImpl });
-  const r = await ifood.processarEventosIfood(db, cli);
+  const r = await ifood.processarEventosIfood(db, cli, { modo: "integrado" });
   assert.equal(r.confirmados, 1);
   assert.deepEqual(api.estado.acks, ["c1"]);
   assert.equal(db.prepare("SELECT status FROM orders WHERE external_id = ?").get(p.id).status, "cancelado");
@@ -259,10 +259,10 @@ test("15. Status feitos por outro sistema (RTP/DSP/CON) são acompanhados, sem v
   ifood.importarPedidoIfood(db, p, { avisar: false });
   api.estado.eventos = [{ id: "a", code: "DSP", orderId: p.id }, { id: "b", code: "RTP", orderId: p.id }];
   const cli = ifood.criarClienteIfood({ clientId: "a", clientSecret: "b", baseUrl: "http://ifood.test", fetchImpl: api.fetchImpl });
-  await ifood.processarEventosIfood(db, cli);
+  await ifood.processarEventosIfood(db, cli, { modo: "integrado" });
   assert.equal(db.prepare("SELECT status FROM orders WHERE external_id = ?").get(p.id).status, "saiu_entrega", "RTP depois de DSP não volta etapa");
   api.estado.eventos = [{ id: "c", code: "CON", orderId: p.id }];
-  await ifood.processarEventosIfood(db, cli);
+  await ifood.processarEventosIfood(db, cli, { modo: "integrado" });
   const o = db.prepare("SELECT status, delivered_at FROM orders WHERE external_id = ?").get(p.id);
   assert.equal(o.status, "entregue");
   assert.ok(o.delivered_at);
@@ -277,10 +277,10 @@ test("16. Se a confirmação falhar, o evento não é confirmado e volta no pró
   let falhar = true;
   const fetchImpl = async (u, o) => (falhar && String(u).endsWith("/confirm") ? { ok: false, status: 503, text: async () => "" } : base(u, o));
   const cli = ifood.criarClienteIfood({ clientId: "a", clientSecret: "b", baseUrl: "http://ifood.test", fetchImpl });
-  const r1 = await ifood.processarEventosIfood(db, cli);
+  const r1 = await ifood.processarEventosIfood(db, cli, { modo: "integrado" });
   assert.equal(r1.confirmados, 0);
   falhar = false;
-  const r2 = await ifood.processarEventosIfood(db, cli);
+  const r2 = await ifood.processarEventosIfood(db, cli, { modo: "integrado" });
   assert.equal(r2.confirmados, 1);
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM orders WHERE external_id = ?").get(p.id).n, 1, "reimportar não duplica");
 });
@@ -312,6 +312,30 @@ test("19. Acknowledgment em lotes de no máximo 2000 ids", async () => {
   const cli = ifood.criarClienteIfood({ clientId: "a", clientSecret: "b", baseUrl: "http://ifood.test", fetchImpl: api.fetchImpl });
   await cli.confirmarEventos(Array.from({ length: 4500 }, (_, i) => "id" + i));
   assert.equal(api.estado.acks.length, 4500);
+});
+
+test("20. Modo portal (padrão): o pedido só entra na produção quando é aceito no iFood, sem o PDV confirmar nada", async () => {
+  const api = apiFalsa();
+  const p = pedido();
+  api.estado.pedidos.set(p.id, p);
+  const cli = ifood.criarClienteIfood({ clientId: "a", clientSecret: "b", baseUrl: "http://ifood.test", fetchImpl: api.fetchImpl });
+  // 1) pedido novo (ainda não aceito): nada aparece na produção, evento é reconhecido
+  api.estado.eventos = [{ id: "p1", code: "PLC", orderId: p.id }];
+  const r1 = await ifood.processarEventosIfood(db, cli, { modo: "portal" });
+  assert.equal(r1.confirmados, 1);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM orders WHERE external_id = ?").get(p.id).n, 0);
+  // 2) aceito no portal do iFood: aparece na produção
+  api.estado.eventos = [{ id: "p2", code: "CFM", orderId: p.id }];
+  await ifood.processarEventosIfood(db, cli, { modo: "portal" });
+  const o = db.prepare("SELECT status, origem FROM orders WHERE external_id = ?").get(p.id);
+  assert.deepEqual({ ...o }, { status: "recebido", origem: "ifood" });
+  assert.ok(db.prepare("SELECT 1 FROM pedidos WHERE comanda_id = (SELECT comanda_id FROM orders WHERE external_id = ?)").get(p.id));
+  // 3) o PDV não chamou nenhuma ação (confirm etc.) no iFood
+  assert.deepEqual(api.estado.acoes, []);
+  // 4) mesmo evento repetido não duplica
+  api.estado.eventos = [{ id: "p3", code: "CFM", orderId: p.id }];
+  await ifood.processarEventosIfood(db, cli, { modo: "portal" });
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM orders WHERE external_id = ?").get(p.id).n, 1);
 });
 
 test.after(() => server.close());
