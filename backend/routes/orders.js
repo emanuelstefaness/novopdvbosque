@@ -61,7 +61,7 @@ ordersRouter.patch('/:id/status', (req, res) => {
     const cliente = criarClienteIfood({ clientId: process.env.IFOOD_CLIENT_ID, clientSecret: process.env.IFOOD_CLIENT_SECRET, baseUrl: process.env.IFOOD_API_BASE || undefined });
     const tarefa = status === 'cancelado'
       ? cancelarNoIfood(cliente, order.external_id, { codigo: req.body?.ifood_cancel_code, motivo: req.body?.motivo_cancelamento })
-      : cliente.avisarStatus(order.external_id, status);
+      : cliente.avisarStatus(order.external_id, status, { entregaPor: order.entrega_por });
     tarefa.catch((e) => console.warn('[iFood] não foi possível avisar o status:', e.message));
   }
   broadcastAll('orders', {});

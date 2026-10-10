@@ -338,4 +338,13 @@ test("20. Modo portal (padrão): o pedido só entra na produção quando é acei
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM orders WHERE external_id = ?").get(p.id).n, 1);
 });
 
+test("21. Entrega pela logística do iFood (deliveredBy IFOOD): o PDV não envia dispatch", async () => {
+  const api = apiFalsa();
+  const cli = ifood.criarClienteIfood({ clientId: "a", clientSecret: "b", baseUrl: "http://ifood.test", fetchImpl: api.fetchImpl });
+  assert.equal(await cli.avisarStatus("lg1", "saiu_entrega", { entregaPor: "IFOOD" }), false);
+  assert.deepEqual(api.estado.acoes, []);
+  const r = ifood.importarPedidoIfood(db, pedido({ delivery: { deliveredBy: "IFOOD", deliveryAddress: { streetName: "R", streetNumber: "1", neighborhood: "C" } } }), { avisar: false });
+  assert.equal(db.prepare("SELECT entrega_por FROM orders WHERE id = ?").get(r.orderId).entrega_por, "IFOOD");
+});
+
 test.after(() => server.close());

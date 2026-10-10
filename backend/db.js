@@ -306,7 +306,7 @@ export function initDb() {
 
   // Pedidos de marketplace (iFood): origem do pedido, id externo (evita importar duas vezes) e o número exibido ao cliente.
   const origemCols = {
-    orders: ["origem TEXT DEFAULT 'proprio'", 'external_id TEXT', 'external_ref TEXT', 'entrega_prevista TEXT'],
+    orders: ["origem TEXT DEFAULT 'proprio'", 'external_id TEXT', 'external_ref TEXT', 'entrega_prevista TEXT', 'entrega_por TEXT'],
     comandas: ['origem TEXT', 'origem_ref TEXT'],
   };
   for (const [tabela, colunas] of Object.entries(origemCols)) {

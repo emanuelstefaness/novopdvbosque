@@ -184,7 +184,8 @@ export function importarPedidoIfood(db, order, { avisar = true } = {}) {
       order.delivery?.deliveryDateTime || order.preparationStartDateTime || null,
     );
     const orderId = Number(info.lastInsertRowid);
-    db.prepare('UPDATE orders SET telefone_normalizado = ? WHERE id = ?').run(telefone.replace(/^55(?=\d{10,11}$)/, ''), orderId);
+    db.prepare('UPDATE orders SET telefone_normalizado = ?, entrega_por = ? WHERE id = ?')
+      .run(telefone.replace(/^55(?=\d{10,11}$)/, ''), order.delivery?.deliveredBy || null, orderId);
 
     const comandaId = db.prepare('SELECT COALESCE(MAX(id), 200) + 1 AS next FROM comandas WHERE id >= 200').get().next;
     db.prepare(`
@@ -317,9 +318,11 @@ export function criarClienteIfood({ clientId, clientSecret, baseUrl = IFOOD_API_
       }),
     pedido: (id) => chamar(`/order/v1.0/orders/${encodeURIComponent(id)}`),
     acao: (id, acao) => chamar(`/order/v1.0/orders/${encodeURIComponent(id)}/${acao}`, { method: 'POST' }),
-    avisarStatus: async (externalId, statusPdv) => {
+    avisarStatus: async (externalId, statusPdv, { entregaPor } = {}) => {
       const acao = ACAO_POR_STATUS[statusPdv];
       if (!acao) return false;
+      // Entrega feita pela logística do iFood: quem despacha é o iFood; o PDV só acompanha os eventos.
+      if (acao === 'dispatch' && String(entregaPor || '').toUpperCase() === 'IFOOD') return false;
       // Entrega própria: o iFood exige "pronto" antes de "saiu para entrega".
       if (acao === 'dispatch' && !prontos.has(externalId)) {
         await chamar(`/order/v1.0/orders/${encodeURIComponent(externalId)}/readyToPickup`, { method: 'POST' }).catch(() => {});
