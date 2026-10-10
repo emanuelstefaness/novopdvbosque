@@ -3,6 +3,8 @@ import { broadcastAll } from '../socket.js';
 import { getPedidoSector } from '../itemSector.js';
 import { resolveLancheAddonsFromBody } from '../lancheAddons.js';
 import { getTaxaEntregaDelivery, entregaGratisAtiva } from '../deliveryFee.js';
+import { rateLimit } from '../auth.js';
+import { loyaltyStatus, loyaltyDiscountCents, normalizePhone as normalizeLoyaltyPhone, LOYALTY_PERCENT } from '../loyalty.js';
 import { isPedidosOnlineAtivo, statusPedidosOnline, MENSAGEM_ONLINE_FECHADO } from '../onlineSystem.js';
 import { createPixPayment, getPaymentStatus, cancelPayment } from '../mercadoPago.js';
 
@@ -170,6 +172,40 @@ publicRouter.get('/menu', (req, res) => {
   });
 });
 
+// Reconhece o cliente pelo celular: devolve nome, último endereço e o cartão fidelidade.
+// Limite baixo de consultas por minuto para dificultar a busca de telefones alheios.
+publicRouter.get('/cliente', rateLimit(Number(process.env.PDV_LOOKUP_LIMIT) || 15), (req, res) => {
+  const db = getDb(req);
+  const tel = normalizeLoyaltyPhone(req.query.telefone);
+  if (tel.length < 10) return res.status(400).json({ error: 'Informe o celular com DDD.' });
+  const fidelidade = loyaltyStatus(db, tel);
+  const ultimo = db
+    .prepare("SELECT cliente_nome, tipo FROM orders WHERE telefone_normalizado = ? AND status != 'cancelado' ORDER BY id DESC LIMIT 1")
+    .get(tel);
+  if (!ultimo) return res.json({ encontrado: false, fidelidade });
+  const entrega = db
+    .prepare(`SELECT endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_referencia
+              FROM orders WHERE telefone_normalizado = ? AND tipo = 'delivery' AND COALESCE(TRIM(endereco_rua), '') != ''
+              ORDER BY id DESC LIMIT 1`)
+    .get(tel);
+  res.json({
+    encontrado: true,
+    nome: ultimo.cliente_nome,
+    ultimo_tipo: ultimo.tipo,
+    endereco: entrega
+      ? {
+          rua: entrega.endereco_rua || '',
+          numero: entrega.endereco_numero || '',
+          complemento: entrega.endereco_complemento || '',
+          bairro: entrega.endereco_bairro || '',
+          referencia: entrega.endereco_referencia || '',
+        }
+      : null,
+    fidelidade,
+    percentual_fidelidade: LOYALTY_PERCENT,
+  });
+});
+
 // Criar pedido online → cria order, comanda (id 201+), pedidos; emite alerta
 publicRouter.post('/orders', async (req, res) => {
   try {
@@ -286,6 +322,14 @@ publicRouter.post('/orders', async (req, res) => {
   if (validItems.length === 0) {
     return res.status(400).json({ error: 'Nenhum item válido no pedido' });
   }
+  // Fidelidade: a cada 10 pedidos entregues, o próximo tem 20% sobre os itens (a entrega não entra).
+  const fidelidade = loyaltyStatus(db, telefone);
+  let descontoFidelidade = 0;
+  if (fidelidade.desconto_disponivel) {
+    const itensCents = Math.round((valorTotal + Number.EPSILON) * 100);
+    descontoFidelidade = loyaltyDiscountCents(itensCents) / 100;
+    valorTotal = (itensCents - loyaltyDiscountCents(itensCents)) / 100;
+  }
   if (tipo === 'delivery') {
     valorTotal += getTaxaEntregaDelivery();
   }
@@ -322,6 +366,8 @@ publicRouter.post('/orders', async (req, res) => {
       formaPg
     );
     const orderId = orderInfo.lastInsertRowid;
+    db.prepare('UPDATE orders SET telefone_normalizado = ?, desconto_fidelidade = ?, fidelidade_aplicada = ? WHERE id = ?')
+      .run(normalizeLoyaltyPhone(telefone), descontoFidelidade, descontoFidelidade > 0 ? 1 : 0, orderId);
 
     db.prepare(`
       INSERT INTO comandas (id, mesa, status, origin_order_id, tipo_online, cliente_nome, cliente_telefone, cliente_email,

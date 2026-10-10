@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { normalizePhone } from './loyalty.js';
 import { initBilling } from './billing.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -291,6 +292,21 @@ export function initDb() {
     db.exec('ALTER TABLE items ADD COLUMN internal_only INTEGER DEFAULT 0');
   } catch (e) {
     if (!e.message || !e.message.includes('duplicate column')) throw e;
+  }
+
+  // Fidelidade do delivery: telefone normalizado (só dígitos), desconto aplicado e se o pedido usou a recompensa.
+  for (const col of ['telefone_normalizado TEXT', 'desconto_fidelidade REAL DEFAULT 0', 'fidelidade_aplicada INTEGER DEFAULT 0']) {
+    try {
+      db.exec(`ALTER TABLE orders ADD COLUMN ${col}`);
+    } catch (e) {
+      if (!e.message || !e.message.includes('duplicate column')) throw e;
+    }
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS orders_telefone_normalizado ON orders(telefone_normalizado)');
+  {
+    const semNorm = db.prepare('SELECT id, cliente_telefone FROM orders WHERE telefone_normalizado IS NULL').all();
+    const upd = db.prepare('UPDATE orders SET telefone_normalizado = ? WHERE id = ?');
+    for (const r of semNorm) upd.run(normalizePhone(r.cliente_telefone), r.id);
   }
 
   // Couvert é cobrança do salão: nunca aparece nem pode ser pedido no cardápio online.

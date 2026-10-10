@@ -1,0 +1,56 @@
+/* Cartão fidelidade do delivery. Independente do resto: funciona no cardápio, na finalização e no acompanhamento. */
+.fidelidade-card {
+  --fid-forest: #153f35;
+  --fid-green: #2b8a62;
+  --fid-line: #d6e3db;
+  display: grid; gap: 10px; padding: 14px 14px 12px;
+  border: 1px solid #d3e5da; border-radius: 16px; background: #f0f7f2; color: #294b3f;
+  font-family: "DM Sans", system-ui, sans-serif; text-align: left;
+}
+.fidelidade-card header { display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 10px; }
+.fidelidade-card-icon {
+  width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px;
+  background: #fff; color: var(--fid-forest); border: 1px solid #d3e5da;
+}
+.fidelidade-card header small { display: block; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: #6b7c72; font-weight: 700; }
+.fidelidade-card header strong { display: block; margin-top: 1px; font-size: 13px; line-height: 1.25; color: #17614d; }
+.fidelidade-card-count { font-size: 24px; line-height: 1; color: var(--fid-forest); font-weight: 800; letter-spacing: -.03em; }
+.fidelidade-card-count span { font-size: 12px; font-weight: 600; color: #7b8a81; letter-spacing: 0; }
+
+.fidelidade-card-stamps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(10, minmax(0, 40px)); justify-content: space-between; gap: 5px; }
+.fidelidade-card-stamps li {
+  aspect-ratio: 1; display: grid; place-items: center; border-radius: 50%;
+  font-size: 10px; font-weight: 700; border: 1.5px dashed var(--fid-line); color: #8a9a90; background: #fff;
+}
+.fidelidade-card-stamps li.is-on { border: 1.5px solid var(--fid-green); background: var(--fid-green); color: #fff; }
+.fidelidade-card-stamps li.is-pending { border: 1.5px solid var(--fid-green); color: var(--fid-green); background: #e3f3ea; animation: fidelidade-pulse 1.6s ease-in-out infinite; }
+.fidelidade-card-stamps li.is-prize { border-color: #c7863a; color: #9a5d12; background: #fff7e8; font-size: 9px; }
+.fidelidade-card-stamps li.is-prize.is-on { border-color: #c7863a; background: #d99a42; color: #fff; }
+@keyframes fidelidade-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .fidelidade-card-stamps li.is-pending { animation: none; } }
+
+.fidelidade-card > p { margin: 0; font-size: 11px; color: #617268; }
+
+/* Recompensa disponível */
+.fidelidade-card.is-recompensa { background: var(--fid-forest); border-color: var(--fid-forest); color: #fff; }
+.fidelidade-card.is-recompensa .fidelidade-card-icon { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.2); color: #fff; }
+.fidelidade-card.is-recompensa header small { color: rgba(255,255,255,.7); }
+.fidelidade-card.is-recompensa header strong,
+.fidelidade-card.is-recompensa .fidelidade-card-count { color: #fff; }
+.fidelidade-card.is-recompensa .fidelidade-card-count span { color: rgba(255,255,255,.7); }
+.fidelidade-card.is-recompensa > p { color: rgba(255,255,255,.82); }
+.fidelidade-card.is-recompensa .fidelidade-card-stamps li { border-color: transparent; }
+
+/* Começando (nenhum pedido ainda) */
+.fidelidade-card.is-inicio { background: #fbf7ec; border-color: #eadfbf; }
+.fidelidade-card.is-inicio header strong { color: #8a5a1d; }
+
+/* Compacto (topo do cardápio) */
+.fidelidade-card.is-compact { padding: 10px 12px; gap: 8px; border-radius: 14px; }
+.fidelidade-card.is-compact header { grid-template-columns: 32px 1fr auto; gap: 9px; }
+.fidelidade-card.is-compact .fidelidade-card-icon { width: 32px; height: 32px; border-radius: 10px; }
+.fidelidade-card.is-compact header strong { font-size: 12px; }
+.fidelidade-card.is-compact .fidelidade-card-count { font-size: 19px; }
+.fidelidade-card.is-compact > p { display: none; }
+.fidelidade-card.is-compact .fidelidade-card-stamps { gap: 4px; grid-template-columns: repeat(10, minmax(0, 32px)); }
+.fidelidade-card.is-compact .fidelidade-card-stamps li { font-size: 9px; }

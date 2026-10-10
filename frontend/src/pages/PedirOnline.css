@@ -328,3 +328,15 @@
 @media (max-width:560px) {
   .delivery-category-arc::before { background-size:84px auto; opacity:.34; }
 }
+
+/* ===== Finalização: cores, botões e cartão fidelidade ===== */
+/* O fundo ao lado da coluna é o mesmo da coluna (antes ficava um tom diferente). */
+.delivery-menu:has(.delivery-checkout-page) { background:#f4f5f2; }
+body:has(.delivery-checkout-page) { background:#f4f5f2; }
+/* Botões principais na cor da marca (antes laranja forte, que destoava do verde do restante). */
+.delivery-cart-continue,.delivery-confirm-order { background:#153f35; box-shadow:0 10px 22px rgba(21,63,53,.26); }
+.delivery-cart-continue:active,.delivery-confirm-order:active { transform:scale(.99); }
+.delivery-checkout-totals b.is-discount { color:#17614d; }
+.delivery-checkout-totals > div:has(.is-discount) span { color:#17614d; font-weight:600; }
+
+.delivery-fidelidade-menu { margin: 0 0 18px; position: relative; z-index: 12; }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import FidelidadeCard from './FidelidadeCard'
 import {
   isStatusTerminal,
   stepsForTipo,
@@ -26,6 +27,7 @@ export default function PedidoOnlineAcompanhamento({
   const [loading, setLoading] = useState(!initialOrder || !orderTemItens(initialOrder))
   const [pixCopiado, setPixCopiado] = useState(false)
   const orderRef = useRef(order)
+  const [cliente, setCliente] = useState(null)
 
   const handleCopiarPix = async () => {
     try {
@@ -40,6 +42,19 @@ export default function PedidoOnlineAcompanhamento({
   useEffect(() => {
     orderRef.current = order
   }, [order])
+
+  // Cartão fidelidade: recarrega quando o pedido muda de status (ex.: entregue vira carimbo).
+  const telefoneCartao = String(telefoneConsulta || order?.cliente_telefone || '').replace(/\D/g, '')
+  const statusPedido = order?.status
+  useEffect(() => {
+    if (telefoneCartao.length < 10) return undefined
+    let cancelled = false
+    fetch(`${apiBase}/api/public/cliente?telefone=${encodeURIComponent(telefoneCartao)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d) setCliente(d) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [apiBase, telefoneCartao, statusPedido])
 
   useEffect(() => {
     if (!orderId) return undefined
@@ -174,6 +189,12 @@ export default function PedidoOnlineAcompanhamento({
         )}
 
         <p className="mt-4 text-xl font-bold text-slate-900">Total: {formatPrice(order.valor_total)}</p>
+        {Number(order.desconto_fidelidade) > 0 && (
+          <p className="mt-1 text-sm font-semibold text-emerald-700">Desconto fidelidade aplicado: − {formatPrice(order.desconto_fidelidade)}</p>
+        )}
+        {cliente?.fidelidade && (
+          <div className="mt-5"><FidelidadeCard fidelidade={cliente.fidelidade} nome={cliente.nome} /></div>
+        )}
 
         {aguardandoPagamento && (
           <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-left">

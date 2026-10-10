@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { resolveRange, receipts, soldItems, sumMoney, deliveryFeeCents } from "../reporting.js";
+import { resolveRange, receipts, soldItems, sumMoney, deliveryAdjustments } from "../reporting.js";
 import { money } from "../billing.js";
 export const reportsRouter = Router();
 reportsRouter.use((req, res, next) => {
@@ -83,8 +83,9 @@ reportsRouter.get("/por-categoria", (req, res) => {
     total: r.total_value,
   }));
   // A taxa de entrega é receita do delivery: sem esta linha, a soma das categorias não fecha com o faturamento.
-  const fee = deliveryFeeCents(req.app.get("db"), req.range.from, req.range.to);
+  const { fee, discount } = deliveryAdjustments(req.app.get("db"), req.range.from, req.range.to);
   if (fee > 0) rows.push({ category_name: "Taxa de entrega", total: money(fee) });
+  if (discount > 0) rows.push({ category_name: "Desconto de fidelidade", total: -money(discount) });
   res.json(rows.sort((a, b) => b.total - a.total));
 });
 reportsRouter.get("/churrasqueira", (req, res) => {

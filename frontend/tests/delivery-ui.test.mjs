@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { categoryArcStyle, categoryArcPoint } from "../src/utils/categoryArc.js";
 import { buildCombos, comboUnitPrices, COMBO_MAX_DISCOUNT_PERCENT, COMBO_MAX_SAVINGS } from "../src/utils/deliveryCombos.js";
 import { itemImageSlug } from "../src/utils/itemImageSlug.js";
+import { descontoFidelidade, mensagemFidelidade, primeiroNome } from "../src/utils/fidelidade.js";
 import { CATEGORY_ICON_BY_SLUG } from "../src/utils/categoryIcons.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -162,4 +163,37 @@ test("Padrão da logo atrás da meia-lua: arquivo existe, é PNG com transparên
   assert.ok(b.length < 120 * 1024, "padrão leve (< 120 KB)");
   const css = fs.readFileSync(path.resolve(here, "../src/pages/PedirOnline.css"), "utf8");
   assert.ok(css.includes("padrao-logo-bosque.png"), "CSS referencia o padrão");
+});
+
+// ---------- fidelidade ----------
+test("Fidelidade: desconto de 20% sobre os itens, arredondado ao centavo como no servidor", () => {
+  const f = { desconto_disponivel: true, percentual: 20 };
+  assert.equal(descontoFidelidade(63.6, f), 12.72);
+  assert.equal(descontoFidelidade(81.8, f), 16.36);
+  assert.equal(descontoFidelidade(0.05, f), 0.01); // 0,01 (meio centavo arredonda para cima)
+  assert.equal(descontoFidelidade(36.9, f), 7.38);
+});
+
+test("Fidelidade: sem direito ao desconto, valor é zero", () => {
+  assert.equal(descontoFidelidade(100, { desconto_disponivel: false, percentual: 20 }), 0);
+  assert.equal(descontoFidelidade(100, null), 0);
+  assert.equal(descontoFidelidade(100, undefined), 0);
+});
+
+test("Fidelidade: mensagens do cartão em cada situação", () => {
+  assert.equal(mensagemFidelidade({ pedidos_concluidos: 0, meta: 10, percentual: 20 }).tipo, "inicio");
+  const prog = mensagemFidelidade({ pedidos_concluidos: 7, no_ciclo: 7, faltam: 3, meta: 10, percentual: 20 });
+  assert.equal(prog.tipo, "progresso");
+  assert.match(prog.titulo, /Faltam 3 pedidos/);
+  assert.match(mensagemFidelidade({ pedidos_concluidos: 9, no_ciclo: 9, faltam: 1, meta: 10, percentual: 20 }).titulo, /Falta 1 pedido/);
+  const ganhou = mensagemFidelidade({ pedidos_concluidos: 10, desconto_disponivel: true, descontos_disponiveis: 1, percentual: 20 });
+  assert.equal(ganhou.tipo, "recompensa");
+  assert.match(ganhou.titulo, /20%/);
+  assert.match(mensagemFidelidade({ desconto_disponivel: true, descontos_disponiveis: 2, percentual: 20 }).detalhe, /2 descontos/);
+});
+
+test("Fidelidade: primeiro nome para cumprimentar", () => {
+  assert.equal(primeiroNome("Ana Souza Lima"), "Ana");
+  assert.equal(primeiroNome("  Bruno "), "Bruno");
+  assert.equal(primeiroNome(""), "");
 });

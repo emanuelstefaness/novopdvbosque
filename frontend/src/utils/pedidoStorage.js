@@ -24,3 +24,21 @@ export function lerPedidoLocal() {
     return null
   }
 }
+
+const TELEFONE_KEY = 'pedir_online_telefone'
+
+/** Lembra o celular neste aparelho para reconhecer o cliente nos próximos pedidos. */
+export function lembrarTelefone(telefone) {
+  try {
+    const d = String(telefone || '').replace(/\D/g, '')
+    if (d.length >= 10) localStorage.setItem(TELEFONE_KEY, d)
+  } catch { /* ignore */ }
+}
+
+export function lerTelefoneLembrado() {
+  try {
+    return localStorage.getItem(TELEFONE_KEY) || ''
+  } catch {
+    return ''
+  }
+}

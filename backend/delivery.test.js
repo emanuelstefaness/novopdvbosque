@@ -54,6 +54,7 @@ process.env.MP_API_BASE = `http://127.0.0.1:${mpServer.address().port}`;
 process.env.MP_ACCESS_TOKEN = "TEST-token-simulado";
 process.env.PEDIDOS_ONLINE_ATIVO = "1";
 process.env.TAXA_ENTREGA_DELIVERY = "10";
+process.env.PDV_LOOKUP_LIMIT = "40"; // limite de consultas de cliente por minuto (o padrão real é 15)
 
 const { db, initDb } = await import("./db.js");
 const { publicRouter } = await import("./routes/public.js");
@@ -395,6 +396,205 @@ test("6.4 Couvert que já existia sem a marca passa a 'só PDV' ao atualizar o s
   db.prepare("UPDATE items SET internal_only=0 WHERE lower(name)='couvert'").run();
   initDb();
   assert.equal(Number(db.prepare("SELECT internal_only FROM items WHERE lower(name)='couvert'").get().internal_only), 1);
+});
+
+// =====================================================================
+// 7. CLIENTE RECONHECIDO PELO CELULAR E FIDELIDADE
+// =====================================================================
+const normTel = (v) => { let n = String(v).replace(/\D/g, ""); if (n.length > 11 && n.startsWith("55")) n = n.slice(2); return n; };
+/** Cria N pedidos já entregues para um celular (histórico). */
+function historico(telefone, n, extra = {}) {
+  const ins = db.prepare("INSERT INTO orders(tipo,status,cliente_nome,cliente_telefone,telefone_normalizado,valor_total,delivered_at,endereco_rua,endereco_numero,endereco_bairro) VALUES(?,?,?,?,?,?,datetime('now','localtime'),?,?,?)");
+  for (let i = 0; i < n; i++) ins.run(extra.tipo || "retirada", extra.status || "entregue", extra.nome || "Cliente Fiel", telefone, normTel(telefone), 30, extra.rua || null, extra.numero || null, extra.bairro || null);
+}
+const cliente = (tel) => call("/public/cliente?telefone=" + encodeURIComponent(tel));
+
+test("7.1 Celular desconhecido: não encontrado, sem cartão fidelidade", async () => {
+  const r = await cliente("41900000001");
+  assert.equal(r.status, 200);
+  assert.equal(r.data.encontrado, false);
+  assert.equal(r.data.fidelidade.pedidos_concluidos, 0);
+  assert.equal(r.data.fidelidade.desconto_disponivel, false);
+});
+
+test("7.2 Celular curto demais é recusado", async () => {
+  assert.equal((await cliente("4190")).status, 400);
+});
+
+test("7.3 Cliente com pedido anterior: devolve nome e o último endereço de entrega", async () => {
+  const tel = "41977770001";
+  historico(tel, 1, { tipo: "delivery", nome: "Ana Souza", rua: "Rua das Flores", numero: "123", bairro: "Centro" });
+  const r = await cliente(tel);
+  assert.equal(r.data.encontrado, true);
+  assert.equal(r.data.nome, "Ana Souza");
+  assert.equal(r.data.endereco.rua, "Rua das Flores");
+  assert.equal(r.data.endereco.numero, "123");
+  assert.equal(r.data.endereco.bairro, "Centro");
+});
+
+test("7.4 O mesmo celular em formatos diferentes é reconhecido", async () => {
+  for (const f of ["(41) 97777-0001", "+55 41 97777-0001", "41 9 7777 0001", "5541977770001"]) {
+    const r = await cliente(f);
+    assert.equal(r.data.encontrado, true, f);
+    assert.equal(r.data.nome, "Ana Souza", f);
+  }
+});
+
+test("7.5 Quem só retirou (nunca pediu entrega) volta sem endereço", async () => {
+  const tel = "41977770002";
+  historico(tel, 1, { tipo: "retirada", nome: "Bruno" });
+  const r = await cliente(tel);
+  assert.equal(r.data.encontrado, true);
+  assert.equal(r.data.endereco, null);
+});
+
+test("7.6 Pedido cancelado não conta como histórico nem como fidelidade", async () => {
+  const tel = "41977770003";
+  historico(tel, 1, { status: "cancelado", nome: "Fantasma" });
+  const r = await cliente(tel);
+  assert.equal(r.data.encontrado, false);
+  assert.equal(r.data.fidelidade.pedidos_concluidos, 0);
+});
+
+test("7.7 Com 9 pedidos entregues ainda não há desconto (faltam 1)", async () => {
+  const tel = "41977771009";
+  historico(tel, 9);
+  const f = (await cliente(tel)).data.fidelidade;
+  assert.equal(f.pedidos_concluidos, 9);
+  assert.equal(f.faltam, 1);
+  assert.equal(f.desconto_disponivel, false);
+  const r = await order({ cliente_telefone: tel, items: [{ item_id: ESP, quantity: 2 }] }); // 31,80
+  eq(r.data.valor_total, 31.8, "sem desconto");
+  assert.equal(r.data.fidelidade_aplicada, 0);
+});
+
+test("7.8 Com 10 pedidos entregues, o próximo ganha 20% nos itens (a entrega não tem desconto)", async () => {
+  const tel = "41977771010";
+  historico(tel, 10);
+  const f = (await cliente(tel)).data.fidelidade;
+  assert.equal(f.desconto_disponivel, true);
+  assert.equal(f.faltam, 0);
+  assert.equal(f.percentual, 20);
+  // delivery: itens 4 × 15,90 = 63,60 → desconto 12,72 → 50,88 + entrega 10,00 = 60,88
+  const r = await order({
+    tipo: "delivery", cliente_telefone: tel, endereco_rua: "Rua X", endereco_numero: "1", endereco_bairro: "Centro",
+    items: [{ item_id: ESP, quantity: 4 }],
+  });
+  assert.equal(r.status, 201);
+  eq(r.data.desconto_fidelidade, 12.72);
+  eq(r.data.valor_total, 60.88);
+  assert.equal(r.data.fidelidade_aplicada, 1);
+});
+
+test("7.9 O desconto é usado uma única vez: o pedido seguinte volta ao preço normal", async () => {
+  const tel = "41977771010";
+  assert.equal((await cliente(tel)).data.fidelidade.desconto_disponivel, false);
+  const r = await order({ cliente_telefone: tel, items: [{ item_id: ESP, quantity: 2 }] });
+  eq(r.data.valor_total, 31.8);
+  assert.equal(r.data.fidelidade_aplicada, 0);
+});
+
+test("7.10 Se o pedido com desconto for cancelado, o desconto volta a ficar disponível", async () => {
+  const tel = "41977771011";
+  historico(tel, 10);
+  const r = await order({ cliente_telefone: tel, items: [{ item_id: BURG, quantity: 1 }] });
+  eq(r.data.valor_total, 29.52, "36,90 − 20%");
+  assert.equal((await cliente(tel)).data.fidelidade.desconto_disponivel, false);
+  await req("/orders/" + r.data.id + "/status", "PATCH", { status: "cancelado", motivo_cancelamento: "teste" });
+  assert.equal((await cliente(tel)).data.fidelidade.desconto_disponivel, true);
+});
+
+test("7.11 Com 20 pedidos entregues há dois descontos acumulados", async () => {
+  const tel = "41977771020";
+  historico(tel, 20);
+  const f = (await cliente(tel)).data.fidelidade;
+  assert.equal(f.descontos_disponiveis, 2);
+  const a = await order({ cliente_telefone: tel, items: [{ item_id: COCA, quantity: 5 }] }); // 40 → 32
+  eq(a.data.valor_total, 32);
+  assert.equal((await cliente(tel)).data.fidelidade.descontos_disponiveis, 1);
+  const b = await order({ cliente_telefone: tel, items: [{ item_id: COCA, quantity: 5 }] });
+  eq(b.data.valor_total, 32);
+  assert.equal((await cliente(tel)).data.fidelidade.desconto_disponivel, false);
+});
+
+test("7.12 O pedido entregue com desconto também conta para o próximo ciclo", async () => {
+  const tel = "41977771030";
+  historico(tel, 10);
+  const r = await order({ cliente_telefone: tel, items: [{ item_id: COCA, quantity: 1 }] });
+  await req("/orders/" + r.data.id + "/status", "PATCH", { status: "entregue" });
+  const f = (await cliente(tel)).data.fidelidade;
+  assert.equal(f.pedidos_concluidos, 11);
+  assert.equal(f.no_ciclo, 1);
+  assert.equal(f.faltam, 9);
+});
+
+test("7.13 PIX cobra o valor já com o desconto de fidelidade", async () => {
+  const tel = "41977771040";
+  historico(tel, 10);
+  mp.calls.length = 0;
+  const r = await order({ forma_pagamento: "pix", cliente_telefone: tel, items: [{ item_id: BURG, quantity: 2 }] }); // 73,80 → 59,04
+  eq(r.data.valor_total, 59.04);
+  const call = mp.calls.find((c) => c.url === "/v1/payments" && c.method === "POST");
+  assert.equal(call.body.transaction_amount, 59.04);
+});
+
+test("7.14 O navegador não consegue forçar desconto (campo enviado é ignorado)", async () => {
+  const tel = "41977771050";
+  historico(tel, 3);
+  const r = await order({ cliente_telefone: tel, desconto_fidelidade: 50, fidelidade_aplicada: 1, items: [{ item_id: BURG, quantity: 1 }] });
+  eq(r.data.valor_total, 36.9);
+  eq(r.data.desconto_fidelidade, 0);
+});
+
+test("7.15 Relatório por categoria mostra o desconto de fidelidade e a soma continua fechando", async () => {
+  const tel = "41977771060";
+  historico(tel, 10);
+  const r = await order({
+    tipo: "delivery", cliente_telefone: tel, endereco_rua: "Rua Z", endereco_numero: "9", endereco_bairro: "Centro",
+    items: [{ item_id: BURG, quantity: 3 }], // 110,70 − 22,14 + 10 = 98,56
+  });
+  eq(r.data.valor_total, 98.56);
+  await req("/orders/" + r.data.id + "/status", "PATCH", { status: "entregue" });
+  const f = await req("/reports/faturamento" + today);
+  const cats = await req("/reports/por-categoria" + today);
+  const linha = cats.find((c) => c.category_name === "Desconto de fidelidade");
+  assert.ok(linha, "linha de desconto");
+  assert.ok(linha.total < 0);
+  const soma = cats.reduce((n, c) => n + Math.round(c.total * 100), 0);
+  assert.equal(soma + Math.round(f.taxaServico * 100), Math.round(f.faturamento * 100), "categorias + serviço = faturamento");
+});
+
+test("7.15b O cartão mostra o pedido que acabou de ser feito como 'contando' e vira carimbo ao ser entregue", async () => {
+  const tel = "41977771070";
+  historico(tel, 3);
+  let f = (await cliente(tel)).data.fidelidade;
+  assert.equal(f.no_ciclo, 3);
+  assert.equal(f.em_andamento, 0);
+  const r = await order({ cliente_telefone: tel, items: [{ item_id: COCA, quantity: 1 }] });
+  f = (await cliente(tel)).data.fidelidade;
+  assert.equal(f.no_ciclo, 3, "ainda não é carimbo");
+  assert.equal(f.em_andamento, 1, "mas já aparece contando");
+  await req("/orders/" + r.data.id + "/status", "PATCH", { status: "entregue" });
+  f = (await cliente(tel)).data.fidelidade;
+  assert.equal(f.no_ciclo, 4, "entregue vira carimbo");
+  assert.equal(f.em_andamento, 0);
+});
+
+test("7.15c Pedido cancelado ou aguardando PIX não aparece como 'contando'", async () => {
+  const tel = "41977771071";
+  historico(tel, 2);
+  const a = await order({ cliente_telefone: tel, items: [{ item_id: COCA, quantity: 1 }] });
+  await req("/orders/" + a.data.id + "/status", "PATCH", { status: "cancelado", motivo_cancelamento: "teste" });
+  await order({ forma_pagamento: "pix", cliente_telefone: tel, items: [{ item_id: COCA, quantity: 1 }] }); // aguardando pagamento
+  const f = (await cliente(tel)).data.fidelidade;
+  assert.equal(f.em_andamento, 0);
+  assert.equal(f.no_ciclo, 2);
+});
+
+test("7.16 Consulta de cliente tem limite por minuto (proteção contra varredura de telefones)", async () => {
+  let ultimo = 0;
+  for (let i = 0; i < 45; i++) ultimo = (await cliente("4190000" + String(1000 + i))).status;
+  assert.equal(ultimo, 429);
 });
 
 test.after(() => {

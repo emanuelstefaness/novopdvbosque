@@ -1,3 +1,4 @@
+/* Especificidade: os seletores de layout começam com "body" para sempre vencer as regras escuras do PDV, qualquer que seja a ordem dos arquivos no pacote. */
 /* Delivery / Pedir online (.public-app): tema CLARO original.
    O PDV interno usa o tema escuro (tokens em :root); aqui os tokens voltam aos valores
    do commit a339821 e as regras .public-* recuperam as cores brancas de antes.
@@ -8,7 +9,7 @@ body:has(.public-app) {
   color: #233246;
 }
 
-.public-app {
+body .public-app {
   --ink: #233246;
   --muted: #728090;
   --line: #e3e8ed;
@@ -22,34 +23,34 @@ body:has(.public-app) {
   color: #233246;
 }
 
-.public-app [class*="bg-gradient"] {
+body .public-app [class*="bg-gradient"] {
   background-image: none;
   background-color: #fff;
 }
-.public-app .public-menu {
+body .public-app .public-menu {
   background: #f5f7f8;
 }
-.public-menu > .sticky {
+body .public-menu > .sticky {
   background: #203b39;
   border-color: #203b39;
 }
-.public-menu [class*="text-red-600"] {
+body .public-menu [class*="text-red-600"] {
   color: #147568;
 }
-.public-menu [class*="border-red-600"] {
+body .public-menu [class*="border-red-600"] {
   border-color: #147568;
 }
-.public-menu main section {
+body .public-menu main section {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
   padding: 20px;
 }
-.public-menu main [class*="group cursor-pointer"] {
+body .public-menu main [class*="group cursor-pointer"] {
   padding: 20px 10px;
   border-color: #edf1f4;
 }
-.public-menu main [class*="group cursor-pointer"]:hover {
+body .public-menu main [class*="group cursor-pointer"]:hover {
   background: #fafcfb;
 }
 

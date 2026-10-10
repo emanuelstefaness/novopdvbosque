@@ -77,8 +77,11 @@ export function soldItems(db, from, to) {
 export const sumMoney = (rows, key) =>
   money(rows.reduce((s, r) => s + cents(r[key] || 0), 0));
 
-/** Taxa de entrega dos pedidos entregues no período: valor do pedido − soma dos itens (em centavos). */
-export function deliveryFeeCents(db, from, to) {
+/**
+ * Diferença entre o valor do pedido online e a soma dos itens, em centavos, dos pedidos entregues no período:
+ * parte positiva = taxa de entrega; parte negativa = desconto de fidelidade.
+ */
+export function deliveryAdjustments(db, from, to) {
   const rows = db
     .prepare(
       `SELECT o.valor_total AS total,
@@ -87,5 +90,15 @@ export function deliveryFeeCents(db, from, to) {
        WHERE o.status='entregue' AND date(COALESCE(o.delivered_at,o.updated_at),'-1 hour') BETWEEN ? AND ?`,
     )
     .all(from, to);
-  return rows.reduce((n, r) => n + Math.max(0, cents(r.total || 0) - r.itens), 0);
+  let fee = 0, discount = 0;
+  for (const r of rows) {
+    const diff = cents(r.total || 0) - r.itens;
+    if (diff > 0) fee += diff; else discount += -diff;
+  }
+  return { fee, discount };
+}
+
+/** Compatibilidade: só a taxa de entrega. */
+export function deliveryFeeCents(db, from, to) {
+  return deliveryAdjustments(db, from, to).fee;
 }

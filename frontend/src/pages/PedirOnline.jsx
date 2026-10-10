@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { getApiBase } from '../devApiBase'
 import PedidoOnlineAcompanhamento from '../components/PedidoOnlineAcompanhamento'
-import { lerPedidoLocal, salvarPedidoLocal } from '../utils/pedidoStorage'
+import { lerPedidoLocal, salvarPedidoLocal, lembrarTelefone, lerTelefoneLembrado } from '../utils/pedidoStorage'
+import { descontoFidelidade } from '../utils/fidelidade'
+import FidelidadeCard from '../components/FidelidadeCard'
 import {
   lancheComOpcionaisAdicionais,
   itemAceitaCebolaCaramelizada,
@@ -223,6 +225,13 @@ function ProductCard({ item, badges = [], categoryIcon = 'book', onOpen, imageTr
   )
 }
 
+/** Miniatura do item no carrinho: se a foto não existir, mostra o ícone em vez da imagem quebrada. */
+function CheckoutThumb({ src }) {
+  const [falhou, setFalhou] = useState(false)
+  if (!src || falhou) return <Icon name="receipt" size={25} />
+  return <img src={src} alt="" onError={() => setFalhou(true)} />
+}
+
 function ComboCard({ combo, onRequestAddCombo }) {
   return (
     <article className="delivery-combo-card">
@@ -271,10 +280,12 @@ export default function PedirOnline() {
   const [cart, setCart] = useState([])
   const [activeCatId, setActiveCatId] = useState('all')
   const [menuSearch, setMenuSearch] = useState('')
+  const [clienteInfo, setClienteInfo] = useState(null)
+  const lookupSeq = useRef(0)
   const [checkout, setCheckout] = useState({
     tipo: 'retirada',
     cliente_nome: '',
-    cliente_telefone: '',
+    cliente_telefone: lerTelefoneLembrado(),
     cliente_email: '',
     observacoes: '',
     forma_pagamento: 'pix',
@@ -404,10 +415,44 @@ export default function PedirOnline() {
 
   const combos = useMemo(() => buildCombos(menu.items, normalize, formatPrice, menu.categories || []), [menu.items, menu.categories])
 
+  // Reconhece o cliente pelo celular: preenche nome e último endereço e mostra o cartão fidelidade.
+  useEffect(() => {
+    const digits = String(checkout.cliente_telefone || '').replace(/\D/g, '')
+    if (digits.length < 10) {
+      setClienteInfo(null)
+      return undefined
+    }
+    const seq = ++lookupSeq.current
+    const timer = setTimeout(async () => {
+      try {
+        const r = await fetch(`${apiBase}/api/public/cliente?telefone=${encodeURIComponent(digits)}`)
+        if (!r.ok || seq !== lookupSeq.current) return
+        const d = await r.json()
+        setClienteInfo(d)
+        if (d.encontrado) {
+          // só preenche o que o cliente ainda não digitou
+          setCheckout((c) => ({
+            ...c,
+            cliente_nome: c.cliente_nome || d.nome || '',
+            endereco_rua: c.endereco_rua || d.endereco?.rua || '',
+            endereco_numero: c.endereco_numero || d.endereco?.numero || '',
+            endereco_complemento: c.endereco_complemento || d.endereco?.complemento || '',
+            endereco_bairro: c.endereco_bairro || d.endereco?.bairro || '',
+            endereco_referencia: c.endereco_referencia || d.endereco?.referencia || '',
+          }))
+        }
+      } catch {
+        /* sem rede: segue sem reconhecimento */
+      }
+    }, 450)
+    return () => clearTimeout(timer)
+  }, [checkout.cliente_telefone, apiBase])
+
   const totalItems = cart.reduce((s, i) => s + i.quantity, 0)
   const subtotalItens = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart])
   const taxaEntrega = checkout.tipo === 'delivery' ? taxaEntregaDelivery : 0
-  const totalPrice = subtotalItens + taxaEntrega
+  const descontoFid = descontoFidelidade(subtotalItens, clienteInfo?.fidelidade)
+  const totalPrice = Math.round((subtotalItens - descontoFid + taxaEntrega) * 100) / 100
 
   const suggestedItems = useMemo(() => {
     if (!modalProduct) return []
@@ -686,6 +731,7 @@ export default function PedirOnline() {
         status: data.status || 'recebido',
       })
       salvarPedidoLocal(data, checkout.cliente_telefone)
+      lembrarTelefone(checkout.cliente_telefone)
       setPedidoSalvoLocal(lerPedidoLocal())
       setStep('done')
       setIsCartOpen(false)
@@ -772,6 +818,9 @@ export default function PedirOnline() {
 
       {step === 'menu' && (
         <main className="mx-auto mt-5 w-full max-w-5xl px-4">
+          <div className="delivery-fidelidade-menu">
+            <FidelidadeCard fidelidade={clienteInfo?.fidelidade} compact />
+          </div>
           {pedidoSalvoLocal?.telefone && (
             <Link
               to="/acompanhar"
@@ -851,7 +900,7 @@ export default function PedirOnline() {
                 return (
                   <article key={`${item.id}-${item.user_note || ''}-${i}`}>
                     <div className={`delivery-checkout-thumb ${source?.transparent ? 'is-cutout' : ''}`}>
-                      {image ? <img src={image} alt="" /> : <Icon name="receipt" size={25} />}
+                      <CheckoutThumb src={image} />
                     </div>
                     <div className="delivery-checkout-item-copy">
                       <h3>{item.name}</h3>
@@ -893,6 +942,7 @@ export default function PedirOnline() {
               <input placeholder="Nome completo *" required value={checkout.cliente_nome} onChange={(e) => setCheckout((c) => ({ ...c, cliente_nome: e.target.value }))} />
               <input placeholder="Telefone / WhatsApp *" required value={checkout.cliente_telefone} onChange={(e) => setCheckout((c) => ({ ...c, cliente_telefone: e.target.value }))} />
               <input placeholder="E-mail (opcional)" value={checkout.cliente_email} onChange={(e) => setCheckout((c) => ({ ...c, cliente_email: e.target.value }))} />
+              <FidelidadeCard fidelidade={clienteInfo?.fidelidade} nome={clienteInfo?.encontrado ? clienteInfo.nome : ''} saudacao />
             </section>
 
             <section className="delivery-checkout-block delivery-payment-block">
@@ -929,6 +979,9 @@ export default function PedirOnline() {
 
             <section className="delivery-checkout-totals">
               <div><span>Subtotal</span><b>{formatPrice(subtotalItens)}</b></div>
+              {descontoFid > 0 && (
+                <div><span>Desconto fidelidade ({clienteInfo.fidelidade.percentual}%)</span><b className="is-discount">− {formatPrice(descontoFid)}</b></div>
+              )}
               <div><span>Entrega</span><b className={taxaEntrega === 0 ? 'is-free' : ''}>{checkout.tipo === 'retirada' ? 'Retirada' : taxaEntrega === 0 ? 'Grátis' : formatPrice(taxaEntrega)}</b></div>
               <div className="is-total"><span>Total</span><strong>{formatPrice(totalPrice)}</strong></div>
             </section>
