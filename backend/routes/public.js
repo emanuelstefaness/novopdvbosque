@@ -35,7 +35,7 @@ function orderComItens(db, order) {
 
 // Cria os pedidos/fila por setor (cozinha, grill, bar) para os itens de um pedido.
 // Usado tanto no despacho imediato (pagamento não-PIX) quanto na confirmação tardia do PIX.
-function dispatchItemsToSectors(db, comandaId, items) {
+export function dispatchItemsToSectors(db, comandaId, items) {
   const insPedido = db.prepare(`
     INSERT INTO pedidos (comanda_id, item_id, quantity, unit_price, observations, prato_feito_espetinho_id, extra_caramelized_onion, extra_hamburger, sector)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)

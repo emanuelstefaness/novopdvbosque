@@ -303,6 +303,31 @@ export function initDb() {
     }
   }
   db.exec('CREATE INDEX IF NOT EXISTS orders_telefone_normalizado ON orders(telefone_normalizado)');
+
+  // Pedidos de marketplace (iFood): origem do pedido, id externo (evita importar duas vezes) e o número exibido ao cliente.
+  const origemCols = {
+    orders: ["origem TEXT DEFAULT 'proprio'", 'external_id TEXT', 'external_ref TEXT', 'entrega_prevista TEXT'],
+    comandas: ['origem TEXT', 'origem_ref TEXT'],
+  };
+  for (const [tabela, colunas] of Object.entries(origemCols)) {
+    for (const col of colunas) {
+      try {
+        db.exec(`ALTER TABLE ${tabela} ADD COLUMN ${col}`);
+      } catch (e) {
+        if (!e.message || !e.message.includes('duplicate column')) throw e;
+      }
+    }
+  }
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS orders_origem_external ON orders(origem, external_id) WHERE external_id IS NOT NULL");
+  // De-para: código/nome do item no iFood → item do PDV (define o setor: churrasqueira, cozinha ou bar).
+  db.exec(`CREATE TABLE IF NOT EXISTS ifood_item_map (
+    external_key TEXT PRIMARY KEY,
+    external_name TEXT,
+    item_id INTEGER,
+    auto_created INTEGER DEFAULT 0,
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (item_id) REFERENCES items(id)
+  )`);
   {
     const semNorm = db.prepare('SELECT id, cliente_telefone FROM orders WHERE telefone_normalizado IS NULL').all();
     const upd = db.prepare('UPDATE orders SET telefone_normalizado = ? WHERE id = ?');

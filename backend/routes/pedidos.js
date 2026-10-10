@@ -126,6 +126,7 @@ pedidosRouter.get('/kitchen', (req, res) => {
   const db = getDb(req);
   const list = db.prepare(`
     SELECT p.*, i.name as item_name, i.is_grill, i.is_prato_feito, c.mesa, c.id as comanda_id, c.production_number,
+      c.origem AS comanda_origem, c.origem_ref AS comanda_origem_ref,
       COALESCE(NULLIF(TRIM(c.tipo_online), ''), o.tipo) AS comanda_tipo_online,
       s.status as sector_status, MAX(0,p.quantity-s.fulfilled_quantity) AS quantity,
       ei.name as prato_feito_espetinho_name, w.name as waiter_name
@@ -154,6 +155,7 @@ pedidosRouter.get('/grill', (req, res) => {
     SELECT p.*, i.name as item_name, i.is_prato_feito as item_is_prato_feito,
       COALESCE(i.is_side, 0) as is_side,
       c.mesa, c.id as comanda_id, c.production_number,
+      c.origem AS comanda_origem, c.origem_ref AS comanda_origem_ref,
       COALESCE(NULLIF(TRIM(c.tipo_online), ''), o.tipo) AS comanda_tipo_online,
       s.status as sector_status, MAX(0,p.quantity-s.fulfilled_quantity) AS quantity,
       ei.name as prato_feito_espetinho_name, w.name as waiter_name
@@ -175,7 +177,8 @@ pedidosRouter.get('/grill', (req, res) => {
       SELECT p.*, i.name as item_name, i.is_prato_feito as item_is_prato_feito,
         COALESCE(i.is_side, 0) as is_side,
         c.mesa, c.id as comanda_id, c.production_number,
-        COALESCE(NULLIF(TRIM(c.tipo_online), ''), o.tipo) AS comanda_tipo_online,
+        c.origem AS comanda_origem, c.origem_ref AS comanda_origem_ref,
+      COALESCE(NULLIF(TRIM(c.tipo_online), ''), o.tipo) AS comanda_tipo_online,
         sk.status as sector_status, MAX(0,p.quantity-sk.fulfilled_quantity) AS quantity,
         ei.name as prato_feito_espetinho_name, w.name as waiter_name
       FROM pedidos p
@@ -199,6 +202,7 @@ pedidosRouter.get('/grill', (req, res) => {
     SELECT p.*, i.name as item_name, i.is_prato_feito as item_is_prato_feito,
       COALESCE(i.is_side, 0) as is_side,
       c.mesa, c.id as comanda_id, c.production_number,
+      c.origem AS comanda_origem, c.origem_ref AS comanda_origem_ref,
       COALESCE(NULLIF(TRIM(c.tipo_online), ''), o.tipo) AS comanda_tipo_online,
       sk.status as sector_status, MAX(0,p.quantity-sk.fulfilled_quantity) AS quantity,
       ei.name as prato_feito_espetinho_name, w.name as waiter_name
@@ -240,6 +244,7 @@ pedidosRouter.get('/bar', (req, res) => {
   const barIn = BAR_CATEGORY_SLUGS.map(() => '?').join(', ');
   const list = db.prepare(`
     SELECT p.*, i.name as item_name, c.mesa, c.id as comanda_id, c.production_number,
+      c.origem AS comanda_origem, c.origem_ref AS comanda_origem_ref,
       COALESCE(NULLIF(TRIM(c.tipo_online), ''), o.tipo) AS comanda_tipo_online,
       COALESCE(s.status, 'pending') as sector_status,
       w.name as waiter_name

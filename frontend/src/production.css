@@ -107,6 +107,7 @@
 }
 .prod-chip.is-delivery { color: var(--prod-delivery); }
 .prod-chip.is-retirada { color: var(--prod-retirada); }
+.prod-chip.is-ifood { background: #ea1d2c; color: #fff; border-color: #ea1d2c; font-weight: 800; }
 
 /* Itens */
 .prod-items {

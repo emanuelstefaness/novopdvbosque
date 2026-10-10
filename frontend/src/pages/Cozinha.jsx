@@ -4,7 +4,7 @@ import { getPedidosKitchen, setPedidoSectorStatus, fulfillKitchenUnit } from '..
 import { useSocket } from '../socket'
 import PedidoElapsed from '../components/PedidoElapsed'
 import {earliestCreatedAt} from '../utils/pedidoTime'
-import { comandaOnlineLabel, isPedidoOnline, tipoOnlineFromPedido } from '../utils/comandaOnlineVisual'
+import { comandaOnlineLabel, comandaOrigemLabel, isPedidoOnline, tipoOnlineFromPedido } from '../utils/comandaOnlineVisual'
 import { observacaoParaProducao } from '../utils/productionObservations'
 import { textoResumoAddonsPedido } from '../utils/lancheAddons'
 
@@ -200,6 +200,7 @@ export default function Cozinha() {
                     {addLab ? <span className="prod-chip" style={{ marginLeft: 6 }}>{addLab}</span> : null}
                   </div>
                   <div className="prod-row-meta">
+                    {comandaOrigemLabel(p) && <span className="prod-chip is-ifood">{comandaOrigemLabel(p)}</span>}
                     {comandaOnlineLabel(p.comanda_tipo_online) && <span className={`prod-chip ${modo}`}>{comandaOnlineLabel(p.comanda_tipo_online)}</span>}
                     {p.mesa && isPedidoOnline(p) && <span>{p.mesa}</span>}
                     {p.waiting_grill && <span className="warn">aguardando churrasqueira</span>}

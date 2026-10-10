@@ -21,6 +21,8 @@ import { ordersRouter } from './routes/orders.js';
 import { financeRouter } from './routes/finance.js';
 import { cashRouter,initCash } from './routes/cash.js';
 import { onlineRouter } from './routes/online.js';
+import { ifoodRouter } from './routes/ifood.js';
+import { ifoodConfigurado, criarClienteIfood, iniciarPollingIfood } from './ifood.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 initDb();
@@ -91,6 +93,7 @@ app.use('/api/orders', ordersRouter);
 app.use('/api/finance', financeRouter);
 app.use('/api/cash', cashRouter);
 app.use('/api/online', onlineRouter);
+app.use('/api/ifood', ifoodRouter);
 
 
 io.on('connection', (socket) => {
@@ -148,6 +151,10 @@ const PORT = process.env.PORT || 3001;
 const HOST = process.env.PDV_HOST || '0.0.0.0';
 httpServer.listen(PORT, HOST, () => {
   announceAccess();
+  if (ifoodConfigurado()) {
+    iniciarPollingIfood(db, criarClienteIfood({ clientId: process.env.IFOOD_CLIENT_ID, clientSecret: process.env.IFOOD_CLIENT_SECRET, baseUrl: process.env.IFOOD_API_BASE || undefined }));
+    console.log('[iFood] integração ativa: consultando eventos a cada 30 s');
+  }
   console.log(`PDV Bosque em ${HOST} — porta ${PORT}`);
   console.log(hasDist
     ? 'Frontend compilado: servindo frontend/dist (sem precisar do servidor de desenvolvimento).'

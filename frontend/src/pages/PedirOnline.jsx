@@ -775,7 +775,6 @@ export default function PedirOnline() {
           <h2 className="mt-3 text-xl font-semibold text-amber-900">Indisponível hoje</h2>
           <p className="mt-3 text-base leading-relaxed text-amber-950">{mensagemFechado}</p>
         </div>
-        <Link to="/" className="mt-8 text-sm text-slate-600 hover:underline">Voltar ao início</Link>
       </div>
     )
   }

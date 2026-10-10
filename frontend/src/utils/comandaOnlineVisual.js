@@ -58,6 +58,12 @@ export function pedidoOnlineTvBannerModel(tipo) {
   }
 }
 
+/** Texto do selo de pedidos vindos de marketplace (ex.: "iFood #1234"); null para pedidos próprios. */
+export function comandaOrigemLabel(p) {
+  if (p?.comanda_origem !== 'ifood') return null
+  return p.comanda_origem_ref ? `iFood #${p.comanda_origem_ref}` : 'iFood'
+}
+
 export function comandaOnlineLabel(tipo) {
   if (tipo === 'delivery') return '🚚 Delivery'
   if (tipo === 'retirada') return '🛍 Retirada'

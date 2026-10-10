@@ -4,7 +4,7 @@ import { getPedidosGrill, getProductionGrill, markPedidoChurrasqueiraReady } fro
 import { useSocket } from '../socket'
 import PedidoElapsed from '../components/PedidoElapsed'
 import {earliestCreatedAt} from '../utils/pedidoTime'
-import { comandaOnlineLabel, isTipoPedidoOnline } from '../utils/comandaOnlineVisual'
+import { comandaOnlineLabel, comandaOrigemLabel, isTipoPedidoOnline } from '../utils/comandaOnlineVisual'
 import { observacaoParaProducao } from '../utils/productionObservations'
 import { textoResumoAddonsPedido } from '../utils/lancheAddons'
 
@@ -206,6 +206,7 @@ export default function Churrasqueira() {
                       Comanda {numero}{card.items[0]?.production_number ? ' (paga)' : ''} — Mesa {card.mesa}
                     </h2>
                     <div className="prod-card-meta">
+                      {comandaOrigemLabel(card.items[0]) && <span className="prod-chip is-ifood">{comandaOrigemLabel(card.items[0])}</span>}
                       {isTipoPedidoOnline(tipoOn) && <span className={`prod-chip ${modo}`}>{comandaOnlineLabel(tipoOn)}</span>}
                       {card.items[0]?.waiter_name && <span>Garçom: {card.items[0].waiter_name}</span>}
                       <span title="Tempo desde o pedido mais antigo desta comanda na fila">

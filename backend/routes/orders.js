@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { broadcastAll } from '../socket.js';
+import { ifoodConfigurado, criarClienteIfood } from '../ifood.js';
 
 export const ordersRouter = Router();
 const getDb = (req) => req.app.get('db');
@@ -55,6 +56,12 @@ ordersRouter.patch('/:id/status', (req, res) => {
     `).run(status, id);
   }
   if (status === 'entregue') db.prepare("UPDATE orders SET delivered_at=COALESCE(delivered_at,datetime('now','localtime')) WHERE id=?").run(id);
+  // Pedido do iFood: avisa o iFood da mudança (confirmar, preparo, pronto, despacho). Falha aqui não trava o PDV.
+  if (order.origem === 'ifood' && order.external_id && ifoodConfigurado()) {
+    criarClienteIfood({ clientId: process.env.IFOOD_CLIENT_ID, clientSecret: process.env.IFOOD_CLIENT_SECRET, baseUrl: process.env.IFOOD_API_BASE || undefined })
+      .avisarStatus(order.external_id, status)
+      .catch((e) => console.warn('[iFood] não foi possível avisar o status:', e.message));
+  }
   broadcastAll('orders', {});
   broadcastAll('comandas', {});
   res.json({ id, status });

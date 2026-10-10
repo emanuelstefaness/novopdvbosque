@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getPedidosGrill } from '../api'
 import { useSocket } from '../socket'
-import { comandaOnlineLabel, isTipoPedidoOnline, pedidoOnlineTvBannerModel, tvPedidoCardClass } from '../utils/comandaOnlineVisual'
+import { comandaOnlineLabel, comandaOrigemLabel, isTipoPedidoOnline, pedidoOnlineTvBannerModel, tvPedidoCardClass } from '../utils/comandaOnlineVisual'
 import { observacaoParaProducao } from '../utils/productionObservations'
 
 export default function TvChurrasqueira() {
@@ -34,6 +34,9 @@ export default function TvChurrasqueira() {
               <span>Comanda {p.comanda_id} — Mesa {p.mesa}</span>
               {isTipoPedidoOnline(p.comanda_tipo_online) && (
                 <span className="rounded-full bg-[#2b2839] px-3 py-1 text-base font-black uppercase text-[#5b1fb7]">Pedir online</span>
+              )}
+              {comandaOrigemLabel(p) && (
+                <span className="rounded-full bg-[#ea1d2c] px-3 py-1 text-lg font-black text-white">{comandaOrigemLabel(p)}</span>
               )}
               {comandaOnlineLabel(p.comanda_tipo_online) && (
                 <span className="rounded-full bg-black/10 px-3 py-1 text-lg text-[#c5cedc]">{comandaOnlineLabel(p.comanda_tipo_online)}</span>
