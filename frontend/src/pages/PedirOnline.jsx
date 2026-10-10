@@ -14,13 +14,19 @@ import {
 } from '../utils/lancheAddons'
 import Icon from '../components/Icon'
 import './PedirOnline.css'
+import { categoryArcStyle, categoryArcSide } from '../utils/categoryArc'
+import { buildCombos, comboUnitPrices } from '../utils/deliveryCombos'
+import { itemImageSlug } from '../utils/itemImageSlug'
 
 const API = getApiBase()
 /** Fallback se a API ainda não devolveu a taxa (backend antigo). */
 const TAXA_ENTREGA_FALLBACK = 10
 
 const BEBIDAS_SLUGS = ['bebidas', 'caipirinhas']
-const HIDDEN_CATEGORY_SLUGS = ['chopp-cerveja', 'drinks', 'doses']
+// Nenhuma categoria é escondida aqui: o que não deve aparecer online é marcado como "só PDV" (internal_only) e o servidor já filtra.
+const HIDDEN_CATEGORY_SLUGS = []
+/** Categorias de bebida agrupadas sob "Bebidas" na meia-lua (aparecem como opções ao tocar em Bebidas). */
+const DRINK_GROUP_SLUGS = ['bebidas', 'chopp-cerveja', 'drinks', 'doses']
 const IMAGE_FILE_BY_ITEM_NAME = {
   'churraspao': 'churraspao.png',
   'coracao de frango': 'coração.png',
@@ -116,16 +122,6 @@ const CATEGORY_ICON_BY_SLUG = {
   caipirinhas: 'cocktail',
 }
 
-function categoryArcStyle(index, total) {
-  const progress = index / Math.max(1, total - 1)
-  const normalizedX = progress * 2 - 1
-  const curve = 1 - Math.sqrt(Math.max(0, 1 - normalizedX * normalizedX))
-  return {
-    '--arc-x': `${8 + progress * 84}%`,
-    '--arc-y': `${18 + curve * 110}px`,
-  }
-}
-
 function isPratoFeitoItem(item) {
   if (!item) return false
   // API/SQLite pode mandar 1, "1", true; comparação solta cobre todos
@@ -169,7 +165,9 @@ function fotocardapioPublicUrl(itemName) {
 }
 
 function resolvePedirItemImages(itemName, apiBase) {
-  const transparent = REAL_CUTOUT_IMAGE_BY_ITEM_NAME[normalize(itemName)]
+  const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
+  const slug = itemImageSlug(itemName)
+  const transparent = REAL_CUTOUT_IMAGE_BY_ITEM_NAME[normalize(itemName)] || (slug ? `${base}/menu-real-cutouts/${slug}.png` : null)
   const local = fotocardapioPublicUrl(itemName)
   const api = apiBase ? getItemImageUrl(apiBase, itemName) : null
   if (transparent) return { image: transparent, imageFallback: local || api || null, transparent: true }
@@ -178,8 +176,13 @@ function resolvePedirItemImages(itemName, apiBase) {
   return { image: api || null, imageFallback: null }
 }
 
+const DRINK_NAME_HINTS = ['caipirinha', 'caipicerva', 'coca-cola', 'fanta', 'guarana', 'redbull', 'red bull', 'suco', 'agua', 'heineken', 'original', 'jordana', 'submarino', 'campari', 'cu de burro', 'jack', 'jagermeister', 'pinga', 'smirnoff', 'soda italiana']
+const DISH_NAME_HINTS = ['alcatra', 'asinha', 'linguica', 'arroz', 'maionese', 'arvoredo', 'petit', 'entrevero', 'prato feito', 'salada do bosque']
+
 function productVisualKind(itemName) {
   const name = normalize(itemName)
+  if (DRINK_NAME_HINTS.some((h) => name.includes(h))) return 'drink'
+  if (DISH_NAME_HINTS.some((h) => name.includes(h))) return 'dish'
   if (name.includes('caipirinha')) return 'drink'
   if (name === 'kafta') return 'patty'
   if (name.includes('churraspao') || name.includes('x-bosque') || name.includes('x bosque')) return 'sandwich'
@@ -193,7 +196,7 @@ function ProductCard({ item, badges = [], categoryIcon = 'book', onOpen, imageTr
   const onImgError=()=>setFailedImages(prev=>[...prev,imgSrc])
 
   return (
-    <article className={`delivery-product-card ${item.transparent ? `has-transparent-image image-${productVisualKind(item.name)}` : ''}`}>
+    <article className={`delivery-product-card ${item.transparent && imgSrc ? `has-transparent-image image-${productVisualKind(item.name)}` : ''}`}>
       <button type="button" onClick={() => onOpen(item)} className="delivery-product-hit" aria-label={`Abrir ${item.name}, ${formatPrice(item.price)}`}>
         <div className="delivery-product-image">
           {imgSrc ? (
@@ -231,29 +234,21 @@ function ProductCard({ item, badges = [], categoryIcon = 'book', onOpen, imageTr
 
 function ComboCard({ combo, onRequestAddCombo }) {
   return (
-    <article className="rounded-2xl border border-amber-200 bg-combo p-4 shadow-card">
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-display text-xl font-black text-[hsl(var(--menu-fg))]">{combo.emoji} {combo.name}</h3>
-          <p className="text-sm text-slate-700">{combo.description}</p>
-        </div>
-        {combo.badge && <span className="rounded-lg bg-emerald-100 px-2 py-1 text-xs font-bold text-savings">{combo.badge}</span>}
+    <article className="delivery-combo-card">
+      <div className="delivery-combo-top">
+        <span className="delivery-combo-tag">Combo</span>
+        {combo.badge && <span className="delivery-combo-save">{combo.badge}</span>}
       </div>
-      <ul className="mb-3 space-y-1 text-sm text-slate-700">
-        {combo.items.map((i) => <li key={i} className="before:mr-2 before:text-red-500 before:content-['•']">{i}</li>)}
+      <h3>{combo.name}</h3>
+      <ul>
+        {combo.items.map((name, idx) => <li key={`${name}-${idx}`}>{name}</li>)}
       </ul>
-      <div className="mb-3 flex items-end justify-between">
+      <div className="delivery-combo-bottom">
         <div>
-          <p className="text-sm text-slate-500 line-through">{formatPrice(combo.originalPrice)}</p>
-          <p className="font-display text-2xl font-black text-[hsl(var(--menu-primary))]">{formatPrice(combo.price)}</p>
+          {combo.originalPrice > combo.price && <s>{formatPrice(combo.originalPrice)}</s>}
+          <strong>{formatPrice(combo.price)}</strong>
         </div>
-        <button
-          type="button"
-          onClick={() => onRequestAddCombo(combo)}
-          className="rounded-xl bg-[hsl(var(--menu-primary))] px-4 py-3 font-bold text-white transition hover:brightness-95 active:scale-95"
-        >
-          Adicionar combo
-        </button>
+        <button type="button" onClick={() => onRequestAddCombo(combo)}>Adicionar combo</button>
       </div>
     </article>
   )
@@ -374,6 +369,12 @@ export default function PedirOnline() {
     return [...fixed, ...rest, ...bebidas]
   }, [menu.categories, categoriesBySlug])
 
+  const drinkGroup = useMemo(
+    () => DRINK_GROUP_SLUGS.map((slug) => categoriesBySlug[slug]).filter((c) => c && (itemsByCategory.get(c.id) || []).length > 0),
+    [categoriesBySlug, itemsByCategory],
+  )
+  const drinkGroupIds = useMemo(() => drinkGroup.map((c) => c.id), [drinkGroup])
+
   const arcCategories = useMemo(() => {
     const requestedOrder = [
       'bebidas',
@@ -410,71 +411,7 @@ export default function PedirOnline() {
       .sort(bySort)
   }, [activeCatId, menuSearch, menu.items, menu.categories, itemsByCategory])
 
-  const destaqueCoracaoItem = useMemo(() => {
-    const all = menu.items || []
-    return all.find((i) => {
-      const n = normalize(i.name)
-      return (n.includes('churraspao') || n.includes('churras pao')) && n.includes('coracao')
-    })
-  }, [menu.items])
-
-  const highlightItems = useMemo(() => {
-    const all = menu.items || []
-    const espetoTop = all.find((i) => normalize(i.name).includes('gado') && normalize(i.name).includes('bacon'))
-    const pratoFeito = all.find((i) => normalize(i.name).includes('prato') && normalize(i.name).includes('feito'))
-    const churraspao = all.find((i) => {
-      const n = normalize(i.name)
-      if (n.includes('coracao')) return false
-      return n.includes('churraspao') || n.includes('churras pao')
-    })
-    return [espetoTop, pratoFeito, churraspao].filter(Boolean)
-  }, [menu.items])
-
-  const combos = useMemo(() => {
-    const all = menu.items || []
-    const pratoFeito = all.find((i) => normalize(i.name).includes('prato') && normalize(i.name).includes('feito'))
-    const churraspao = all.find((i) => {
-      const n = normalize(i.name)
-      if (n.includes('coracao')) return false
-      return n.includes('churraspao') || n.includes('churras pao')
-    })
-    const coca = all.find((i) => normalize(i.name).includes('coca')) || all.find((i) => normalize(i.name).includes('refrigerante'))
-
-    const makeCombo = (id, name, emoji, products, discountPercent) => {
-      if (products.some((p) => !p)) return null
-      // Índices no combo onde entra o mesmo item do "Prato Feito" do cardápio (não depende só de is_prato_feito no JSON)
-      const pfSlots = []
-      if (pratoFeito) {
-        products.forEach((p, i) => {
-          if (p && Number(p.id) === Number(pratoFeito.id)) pfSlots.push(i)
-        })
-      }
-      const original = products.reduce((s, p) => s + Number(p.price || 0), 0)
-      const rawDiscounted = Number((original * (1 - discountPercent / 100)).toFixed(2))
-      const maxSavings = 8
-      const minAllowedPrice = Number((original - maxSavings).toFixed(2))
-      const discounted = Math.max(rawDiscounted, minAllowedPrice)
-      const save = Number((original - discounted).toFixed(2))
-      return {
-        id,
-        name,
-        emoji,
-        products,
-        pfSlots,
-        description: 'Preço especial no combo para aumentar seu custo-benefício.',
-        items: products.map((p) => p.name),
-        originalPrice: original,
-        price: discounted,
-        badge: save > 0 ? `Economize ${formatPrice(save)}` : null,
-      }
-    }
-
-    return [
-      makeCombo('combo-pf-churraspao', 'Combo PF + Churraspão + Coca', '', [pratoFeito, churraspao, coca], 12),
-      makeCombo('combo-2-churraspao', 'Combo 2 Churraspão + 2 Coca', '', [churraspao, churraspao, coca, coca], 15),
-      makeCombo('combo-2-pf', 'Combo 2 PF + 2 Coca', '', [pratoFeito, pratoFeito, coca, coca], 15),
-    ].filter(Boolean)
-  }, [menu.items, categoriesBySlug])
+  const combos = useMemo(() => buildCombos(menu.items, normalize, formatPrice, menu.categories || []), [menu.items, menu.categories])
 
   const totalItems = cart.reduce((s, i) => s + i.quantity, 0)
   const subtotalItens = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart])
@@ -639,10 +576,9 @@ export default function PedirOnline() {
     .reduce((sum, c) => sum + c.quantity, 0)
 
   const addComboInternal = (combo, pfEspByIndex) => {
-    const original = combo.products.reduce((s, p) => s + Number(p.price || 0), 0)
-    const factor = original > 0 ? combo.price / original : 1
+    const unitPrices = comboUnitPrices(combo)
     combo.products.forEach((p, idx) => {
-      const adjusted = Number((Number(p.price || 0) * factor).toFixed(2))
+      const adjusted = unitPrices[idx]
       let espOk = null
       if (pfEspByIndex && isPratoFeitoItem(p)) {
         const e = Number(pfEspByIndex[idx])
@@ -830,10 +766,11 @@ export default function PedirOnline() {
             <div className="delivery-category-orbit">
               {arcCategories.map((c, index) => {
                 const arcStyle = categoryArcStyle(index, arcCategories.length)
-                if (!c) return <button type="button" key="all" style={arcStyle} className={`category-all ${activeCatId === 'all' ? 'is-active' : ''}`} onClick={() => setActiveCatId('all')}>
+                if (!c) return <button type="button" key="all" style={arcStyle} className={`category-all arc-side-${categoryArcSide(index, arcCategories.length)} ${activeCatId === 'all' ? 'is-active' : ''}`} onClick={() => setActiveCatId('all')}>
                   <span><Icon name="grid" size={20} /></span><b>Todos</b>
                 </button>
-                return <button type="button" key={c.id} className={activeCatId === c.id ? 'is-active' : ''} style={arcStyle} onClick={() => setActiveCatId(c.id)}>
+                const ativo = activeCatId === c.id || (c.slug === 'bebidas' && drinkGroupIds.includes(activeCatId))
+                return <button type="button" key={c.id} className={`arc-side-${categoryArcSide(index, arcCategories.length)} ${ativo ? 'is-active' : ''}`} style={arcStyle} onClick={() => setActiveCatId(c.id)}>
                   <span><Icon name={CATEGORY_ICON_BY_SLUG[c.slug] || 'book'} size={20} /></span>
                   <b>{c.name}</b>
                 </button>
@@ -866,10 +803,30 @@ export default function PedirOnline() {
           )}
 
           <section className="delivery-catalog">
+            {activeCatId === 'all' && !menuSearch.trim() && combos.length > 0 && (
+              <div className="delivery-combos" aria-label="Combos">
+                <div className="delivery-catalog-heading">
+                  <div><span>Economize</span><h2>Combos</h2></div>
+                  <small>{combos.length} {combos.length === 1 ? 'combo' : 'combos'}</small>
+                </div>
+                <div className="delivery-combo-row">
+                  {combos.map((combo) => <ComboCard key={combo.id} combo={combo} onRequestAddCombo={requestAddCombo} />)}
+                </div>
+              </div>
+            )}
             <div className="delivery-catalog-heading">
               <div><span>Escolha o seu</span><h2>{activeCatId === 'all' ? 'Cardápio' : orderedCategories.find((c) => c.id === activeCatId)?.name}</h2></div>
               <small>{visibleMenuItems.length} {visibleMenuItems.length === 1 ? 'opção' : 'opções'}</small>
             </div>
+            {drinkGroup.length > 1 && drinkGroupIds.includes(activeCatId) && (
+              <div className="delivery-subcategories" role="group" aria-label="Tipos de bebida">
+                {drinkGroup.map((c) => (
+                  <button type="button" key={c.id} className={activeCatId === c.id ? 'is-active' : ''} onClick={() => setActiveCatId(c.id)}>
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="delivery-products-grid">
               {visibleMenuItems.map((item) => {
                 const n = normalize(item.name)
@@ -882,97 +839,6 @@ export default function PedirOnline() {
             </div>
           </section>
 
-          {destaqueCoracaoItem && (
-            <section className="mb-8 overflow-hidden rounded-2xl border-2 border-[hsl(var(--menu-primary))] bg-gradient-to-br from-orange-50 via-white to-amber-50/80 shadow-xl ring-1 ring-orange-200/60">
-              <div className="grid gap-0 md:grid-cols-2 md:items-stretch">
-                <div className="relative aspect-[4/3] min-h-[200px] bg-slate-200 md:min-h-[260px]">
-                  {(() => {
-                    const { image, imageFallback } = resolvePedirItemImages(destaqueCoracaoItem.name, apiBase)
-                    return image ? (
-                      <img
-                        src={image}
-                        alt={destaqueCoracaoItem.name}
-                        className="h-full w-full object-cover"
-                        onError={(e) => {
-                          if (imageFallback && e.currentTarget.src !== imageFallback) {
-                            e.currentTarget.src = imageFallback
-                          }
-                        }}
-                      />
-                    ) : (
-                      <div className="flex h-full min-h-[200px] items-center justify-center bg-slate-100 text-slate-500">Foto em breve</div>
-                    )
-                  })()}
-                </div>
-                <div className="flex flex-col justify-center p-5 md:p-8">
-                  <span className="text-xs font-black uppercase tracking-[0.2em] text-red-600">Destaque</span>
-                  <h2 className="mt-1 font-display text-2xl font-black leading-tight text-[hsl(var(--menu-fg))] md:text-3xl">
-                    {destaqueCoracaoItem.name}
-                  </h2>
-                  <p className="mt-3 text-sm leading-relaxed text-slate-700 md:text-base">{textoDescricaoItemPedir(destaqueCoracaoItem)}</p>
-                  <p className="mt-4 text-2xl font-black text-[hsl(var(--menu-primary))]">{formatPrice(destaqueCoracaoItem.price)}</p>
-                  <button
-                    type="button"
-                    onClick={() => setModalProduct(destaqueCoracaoItem)}
-                    className="mt-5 rounded-xl bg-black py-3.5 text-base font-bold text-white shadow-lg transition hover:opacity-90 active:scale-[0.99]"
-                  >
-                    Pedir agora
-                  </button>
-                </div>
-              </div>
-            </section>
-          )}
-
-          <section className="mb-8">
-            <div className="mb-3 flex items-center gap-2">
-              <span></span>
-              <h2 className="text-xl font-semibold">Destaque da Casa</h2>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3">
-              {highlightItems.map((item) => (
-                <ProductCard
-                  key={`highlight-${item.id}`}
-                  item={item}
-                  highlight
-                  badges={normalize(item.name).includes('bacon') ? [' MAIS PEDIDO', ' FAVORITO'] : [' FAVORITO']}
-                  onOpen={setModalProduct}
-                />
-              ))}
-            </div>
-          </section>
-
-          {combos.length > 0 && (
-            <section className="mb-8">
-              <div className="mb-3 flex items-center gap-2">
-                <span></span>
-                <h2 className="text-xl font-semibold">Combos</h2>
-              </div>
-              <div className="space-y-3">
-                {combos.map((combo) => <ComboCard key={combo.id} combo={combo} onRequestAddCombo={requestAddCombo} />)}
-              </div>
-            </section>
-          )}
-
-          {orderedCategories.map((cat) => {
-            const items = itemsByCategory.get(cat.id) || []
-            if (items.length === 0) return null
-            return (
-              <section id={`cat-${cat.id}`} key={cat.id} className="mb-6 scroll-mt-20">
-                <div className="mb-3 flex items-center gap-2">
-                  <h2 className="text-xl font-semibold">{cat.name}</h2>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-white px-3">
-                  {items.map((item) => {
-                    const n = normalize(item.name)
-                    const badges = []
-                    if (n.includes('gado') && n.includes('bacon')) badges.push(' MAIS PEDIDO')
-                    if (n.includes('churraspao') || n.includes('prato feito')) badges.push(' FAVORITO')
-                    return <ProductCard key={item.id} item={item} badges={badges} highlight={n.includes('churraspao') || n.includes('prato feito')} onOpen={setModalProduct} />
-                  })}
-                </div>
-              </section>
-            )
-          })}
         </main>
       )}
 

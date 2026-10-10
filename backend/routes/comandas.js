@@ -272,8 +272,8 @@ comandasRouter.post('/:id/lancar-couvert', (req, res) => {
   let item = db.prepare('SELECT * FROM items WHERE name = ? AND category_id = ?').get('Couvert', categoryId);
   if (!item) {
     db.prepare(`
-      INSERT INTO items (category_id, name, price, description, requires_meat_point, is_grill, is_kitchen, is_bar, is_side, is_prato_feito)
-      VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, 0)
+      INSERT INTO items (category_id, name, price, description, requires_meat_point, is_grill, is_kitchen, is_bar, is_side, is_prato_feito, internal_only)
+      VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 1)
     `).run(categoryId, 'Couvert', couvertPerPerson, null);
     item = db.prepare('SELECT * FROM items WHERE name = ? AND category_id = ?').get('Couvert', categoryId);
   }

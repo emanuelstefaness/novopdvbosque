@@ -47,7 +47,7 @@
   overflow:hidden; background:var(--delivery-canvas);
   border-radius:50% 50% 0 0 / 46% 46% 0 0;
 }
-.delivery-category-orbit { position:relative; width:min(720px,100%); height:100%; margin:0 auto; }
+.delivery-category-orbit { position:relative; width:min(860px,100%); height:100%; margin:0 auto; }
 .delivery-category-arc button {
   position:absolute; top:var(--arc-y,72px); left:var(--arc-x,50%); width:78px; border:0; background:transparent; color:#737a74;
   transform:translateX(-50%);
@@ -262,4 +262,58 @@
   ::view-transition-group(delivery-product-image),
   ::view-transition-old(delivery-product-image),
   ::view-transition-new(delivery-product-image) { animation-duration:.01ms; }
+}
+
+/* ===== Combos (redesenho) ===== */
+.delivery-combos { margin:0 0 26px; }
+.delivery-combo-row { display:flex; gap:14px; overflow-x:auto; padding:4px 2px 14px; scroll-snap-type:x proximity; scrollbar-width:thin; }
+.delivery-combo-card {
+  flex:0 0 min(300px, 82%); scroll-snap-align:start; display:flex; flex-direction:column; gap:10px; padding:16px;
+  background:#fffdf9; border:1px solid #e4e0d2; border-radius:20px; box-shadow:0 12px 28px rgba(35,59,48,.09);
+}
+.delivery-combo-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.delivery-combo-tag { padding:3px 10px; border-radius:20px; background:#153f35; color:#fff; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+.delivery-combo-save { padding:3px 9px; border-radius:20px; background:#e7f4ed; color:#26704f; font-size:11px; font-weight:800; }
+.delivery-combo-card h3 { margin:0; font:700 19px/1.2 "Fraunces","DM Serif Display",Georgia,serif; color:#153f35; }
+.delivery-combo-card ul { margin:0; padding:0; list-style:none; display:grid; gap:4px; }
+.delivery-combo-card li { position:relative; padding-left:16px; font-size:13px; color:#4d5750; }
+.delivery-combo-card li::before { content:""; position:absolute; left:2px; top:.55em; width:6px; height:6px; border-radius:50%; background:#c76f3a; }
+.delivery-combo-bottom { margin-top:auto; padding-top:6px; display:flex; align-items:flex-end; justify-content:space-between; gap:10px; }
+.delivery-combo-bottom s { display:block; font-size:12px; color:#8b928c; }
+.delivery-combo-bottom strong { font:800 22px/1.1 "DM Sans",sans-serif; color:#b35a22; }
+.delivery-combo-bottom button {
+  border:0; border-radius:14px; padding:11px 15px; background:#153f35; color:#fff; font:700 13px "DM Sans",sans-serif; cursor:pointer;
+}
+.delivery-combo-bottom button:active { transform:scale(.97); }
+
+/* ===== Tipos de bebida (grupo Bebidas) ===== */
+.delivery-subcategories { display:flex; gap:8px; overflow-x:auto; padding:2px 0 14px; scrollbar-width:none; }
+.delivery-subcategories::-webkit-scrollbar { display:none; }
+.delivery-subcategories button {
+  flex:0 0 auto; border:1px solid #dce1db; border-radius:20px; padding:7px 14px; background:#fffdf9; color:#415048;
+  font:600 12px "DM Sans",sans-serif; cursor:pointer;
+}
+.delivery-subcategories button.is-active { background:#153f35; border-color:#153f35; color:#fff; }
+
+/* Telas estreitas (< 840px): com 9 categorias os rótulos se sobrepõem. Só o da categoria ativa aparece; o nome também está no título do cardápio. */
+@media (max-width:839px) {
+  .delivery-category-arc button > b { display:none; }
+  .delivery-category-arc button.is-active > b {
+    display:block; position:absolute; top:100%; left:50%; transform:translateX(-50%); margin-top:2px;
+    padding:2px 7px; border-radius:10px; background:#153f35; color:#fff; font-size:10px; max-width:none; overflow:visible;
+  }
+  .delivery-category-arc button.is-active::after { display:none; }
+  .delivery-combos { margin-bottom:22px; }
+}
+.delivery-combos { margin-bottom:26px; }
+
+/* Rótulos das pontas ficam ao lado do ícone, pelo lado de fora da curva (a partir de 840px de largura). */
+@media (min-width:840px) {
+  .delivery-category-arc button.arc-side-left > b,
+  .delivery-category-arc button.arc-side-right > b { position:absolute; top:13px; }
+  /* lado de fora da curva: é onde há espaço livre (o de dentro encosta nos vizinhos) */
+  .delivery-category-arc button.arc-side-left > b { right:calc(50% + 30px); text-align:right; }
+  .delivery-category-arc button.arc-side-right > b { left:calc(50% + 30px); text-align:left; }
+  .delivery-category-arc button.arc-side-left.is-active::after,
+  .delivery-category-arc button.arc-side-right.is-active::after { display:none; }
 }

@@ -61,6 +61,7 @@ const { ordersRouter } = await import("./routes/orders.js");
 const { reportsRouter } = await import("./routes/reports.js");
 const { financeRouter } = await import("./routes/finance.js");
 const { pedidosRouter } = await import("./routes/pedidos.js");
+const { comandasRouter } = await import("./routes/comandas.js");
 const { businessToday } = await import("./reporting.js");
 initDb();
 
@@ -72,6 +73,7 @@ app.use("/orders", ordersRouter);
 app.use("/reports", reportsRouter);
 app.use("/finance", financeRouter);
 app.use("/pedidos", pedidosRouter);
+app.use("/comandas", comandasRouter);
 const server = app.listen(0, "127.0.0.1");
 await new Promise((r) => server.once("listening", r));
 const url = `http://127.0.0.1:${server.address().port}`;
@@ -353,6 +355,46 @@ test("5.5 Itens vendidos online somam as quantidades entregues", async () => {
   const top = await req("/reports/itens-mais-vendidos" + today);
   const esp = top.find((t) => t.name === "Gado com Bacon");
   assert.equal(esp.total_quantity, 4, "só o pedido entregue (4 espetinhos)");
+});
+
+// =====================================================================
+// 6. O QUE APARECE NO CARDÁPIO ONLINE
+// =====================================================================
+test("6.1 Todo item que não é 'só PDV' aparece online, inclusive Chopp/Cerveja, Drinks e Doses", async () => {
+  const chopp = Number(db.prepare("INSERT INTO categories(name,slug,sort_order) VALUES('Chopp / Cerveja','chopp-cerveja',20)").run().lastInsertRowid);
+  const drinks = Number(db.prepare("INSERT INTO categories(name,slug,sort_order) VALUES('Drinks','drinks',21)").run().lastInsertRowid);
+  const doses = Number(db.prepare("INSERT INTO categories(name,slug,sort_order) VALUES('Doses','doses',22)").run().lastInsertRowid);
+  const ids = [mk(chopp, "Heineken 600ml", 19.9), mk(drinks, "Caipicerva", 37.9), mk(doses, "Campari", 19)];
+  const m = await req("/public/menu");
+  for (const id of ids) assert.ok(m.items.some((i) => i.id === id), "item " + id + " deveria aparecer");
+  for (const slug of ["chopp-cerveja", "drinks", "doses"]) assert.ok(m.categories.some((c) => c.slug === slug), slug);
+});
+
+test("6.2 A opção 'só PDV' do item tira ele do cardápio online e bloqueia o pedido", async () => {
+  const id = mk(catBeb, "Item só do salão", 9);
+  assert.ok((await req("/public/menu")).items.some((i) => i.id === id));
+  db.prepare("UPDATE items SET internal_only=1 WHERE id=?").run(id);
+  assert.equal((await req("/public/menu")).items.some((i) => i.id === id), false);
+  assert.equal((await order({ items: [{ item_id: id, quantity: 1 }] })).status, 400);
+  db.prepare("UPDATE items SET internal_only=0 WHERE id=?").run(id);
+  assert.ok((await req("/public/menu")).items.some((i) => i.id === id), "volta ao desmarcar");
+});
+
+test("6.3 Couvert lançado na comanda nasce como 'só PDV' e não aparece no cardápio online", async () => {
+  await req("/comandas/7/open", "POST", { mesa: "7" });
+  await req("/comandas/7", "PATCH", { people_count: 2 });
+  await req("/comandas/7/lancar-couvert", "POST", {});
+  const couvert = db.prepare("SELECT id, internal_only FROM items WHERE lower(name)='couvert'").get();
+  assert.equal(Number(couvert.internal_only), 1);
+  const m = await req("/public/menu");
+  assert.equal(m.items.some((i) => i.id === couvert.id), false);
+  assert.equal((await order({ items: [{ item_id: couvert.id, quantity: 1 }] })).status, 400);
+});
+
+test("6.4 Couvert que já existia sem a marca passa a 'só PDV' ao atualizar o sistema", async () => {
+  db.prepare("UPDATE items SET internal_only=0 WHERE lower(name)='couvert'").run();
+  initDb();
+  assert.equal(Number(db.prepare("SELECT internal_only FROM items WHERE lower(name)='couvert'").get().internal_only), 1);
 });
 
 test.after(() => {

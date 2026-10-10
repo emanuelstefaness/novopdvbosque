@@ -293,6 +293,9 @@ export function initDb() {
     if (!e.message || !e.message.includes('duplicate column')) throw e;
   }
 
+  // Couvert é cobrança do salão: nunca aparece nem pode ser pedido no cardápio online.
+  db.exec("UPDATE items SET internal_only = 1 WHERE lower(trim(name)) = 'couvert' AND COALESCE(internal_only, 0) = 0");
+
   // Bar: fila só para categorias do bar; remove status bar de itens fora da lista
   const barSlugSql = sqlQuotedList(BAR_CATEGORY_SLUGS);
   try {
