@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { getApiBase } from '../devApiBase'
 import PedidoOnlineAcompanhamento from '../components/PedidoOnlineAcompanhamento'
@@ -11,6 +12,8 @@ import {
   PRECO_CEbola_CARAMELIZADA,
   PRECO_HAMBURGUER_EXTRA
 } from '../utils/lancheAddons'
+import Icon from '../components/Icon'
+import './PedirOnline.css'
 
 const API = getApiBase()
 /** Fallback se a API ainda não devolveu a taxa (backend antigo). */
@@ -30,6 +33,30 @@ const IMAGE_FILE_BY_ITEM_NAME = {
   'salada do bosque': 'salada do bosque.png',
   'x-bosque': 'xbosque.png',
   'churraspao de coracao': 'churraspao-coracao.png'
+}
+const REAL_CUTOUT_IMAGE_BY_ITEM_NAME = {
+  'gado com bacon': '/menu-real-cutouts/gado-com-bacon.png',
+  'gado com bacon e legumes': '/menu-real-cutouts/gado-com-bacon-e-legumes.png',
+  'kafta': '/menu-real-cutouts/kafta.png',
+  'coracao de frango': '/menu-real-cutouts/coracao-de-frango.png',
+  'medalhao suino': '/menu-real-cutouts/medalhao-suino.png',
+  'medalhao de frango': '/menu-real-cutouts/medalhao-de-frango.png',
+  'medalhao de mandioca': '/menu-real-cutouts/medalhao-de-mandioca.png',
+  'pao de alho': '/menu-real-cutouts/pao-de-alho.png',
+  'queijo coalho': '/menu-real-cutouts/queijo-coalho.png',
+  'entrevero': '/menu-real-cutouts/entrevero.png',
+  'churraspao': '/menu-real-cutouts/churraspao.png',
+  'churraspao de coracao': '/menu-real-cutouts/churraspao-de-coracao.png',
+  'prato feito do bosque': '/menu-real-cutouts/prato-feito-do-bosque.png',
+  'salada do bosque': '/menu-real-cutouts/salada-do-bosque.png',
+  'x-bosque': '/menu-real-cutouts/x-bosque.png',
+  'caipirinha maracuja': '/menu-real-cutouts/caipirinha-maracuja.png',
+  'caipirinha limao': '/menu-real-cutouts/caipirinha-limao.png',
+  'caipirinha morango': '/menu-real-cutouts/caipirinha-morango.png',
+  'caipirinha kiwi': '/menu-real-cutouts/caipirinha-kiwi.png',
+  'caipirinha abacaxi': '/menu-real-cutouts/caipirinha-abacaxi.png',
+  'caipirinha mista': '/menu-real-cutouts/caipirinha-mista.png',
+  'caipirinha yakult': '/menu-real-cutouts/caipirinha-yakult.png',
 }
 
 /**
@@ -57,6 +84,8 @@ const PEDIR_MARKETING_DESC = {
     'Carne bovina suculenta com pedaços de bacon — defumado, intenso e impossível de resistir.',
   'gado com bacon e legumes':
     'Carne bovina macia com legumes grelhados — leve, saboroso e no ponto certo.',
+  kafta:
+    'Hambúrguer artesanal de kafta com pequenos cubos de pimentão e alho, dourado diretamente na brasa.',
   'medalhao de frango':
     'Frango macio envolto em bacon, dourado na brasa — suculento e cheio de sabor.',
   'medalhao suino':
@@ -76,6 +105,26 @@ const normalize = (v) => String(v || '').toLowerCase().normalize('NFD').replace(
 const bySort = (a, b) => (a.sort_order || 0) - (b.sort_order || 0)
 
 const slugOrder = ['espetinhos', 'lanches', 'pratos', 'porcoes']
+const CATEGORY_ICON_BY_SLUG = {
+  espetinhos: 'skewer',
+  lanches: 'burger',
+  pratos: 'plate',
+  porcoes: 'bowl',
+  acompanhamentos: 'leaf',
+  sobremesas: 'dessert',
+  bebidas: 'bottle',
+  caipirinhas: 'cocktail',
+}
+
+function categoryArcStyle(index, total) {
+  const progress = index / Math.max(1, total - 1)
+  const normalizedX = progress * 2 - 1
+  const curve = 1 - Math.sqrt(Math.max(0, 1 - normalizedX * normalizedX))
+  return {
+    '--arc-x': `${8 + progress * 84}%`,
+    '--arc-y': `${18 + curve * 110}px`,
+  }
+}
 
 function isPratoFeitoItem(item) {
   if (!item) return false
@@ -108,9 +157,7 @@ function getItemImageUrl(apiBase, itemName) {
 /** Nome do arquivo em `public/fotocardapio/` (deploy Vercel = mesmo site do Pedir). */
 function fotocardapioFileForItemName(itemName) {
   const n = normalize(itemName)
-  if (IMAGE_FILE_BY_ITEM_NAME[n]) return IMAGE_FILE_BY_ITEM_NAME[n]
-  const slug = n.replace(/\s+/g, '-').replace(/[^a-z0-9-]+/g, '')
-  return slug ? `${slug}.jpg` : null
+  return IMAGE_FILE_BY_ITEM_NAME[n] || null
 }
 
 /** URL servida pelo Vite/Vercel a partir da pasta `frontend/public/fotocardapio/`. */
@@ -122,50 +169,62 @@ function fotocardapioPublicUrl(itemName) {
 }
 
 function resolvePedirItemImages(itemName, apiBase) {
+  const transparent = REAL_CUTOUT_IMAGE_BY_ITEM_NAME[normalize(itemName)]
   const local = fotocardapioPublicUrl(itemName)
   const api = apiBase ? getItemImageUrl(apiBase, itemName) : null
+  if (transparent) return { image: transparent, imageFallback: local || api || null, transparent: true }
   if (local && api && local !== api) return { image: local, imageFallback: api }
   if (local) return { image: local, imageFallback: api || null }
   return { image: api || null, imageFallback: null }
 }
 
-function ProductCard({ item, badges = [], onOpen }) {
+function productVisualKind(itemName) {
+  const name = normalize(itemName)
+  if (name.includes('caipirinha')) return 'drink'
+  if (name === 'kafta') return 'patty'
+  if (name.includes('churraspao') || name.includes('x-bosque') || name.includes('x bosque')) return 'sandwich'
+  if (name.includes('entrevero') || name.includes('prato feito') || name.includes('salada do bosque')) return 'dish'
+  return 'skewer'
+}
+
+function ProductCard({ item, badges = [], categoryIcon = 'book', onOpen, imageTransitionActive = false }) {
   const [failedImages,setFailedImages]=useState([])
   const imgSrc=[item.image,item.imageFallback].find(src=>src&&!failedImages.includes(src))||null
   const onImgError=()=>setFailedImages(prev=>[...prev,imgSrc])
 
   return (
-    <article
-      onClick={() => onOpen(item)}
-      className="group cursor-pointer border-b border-slate-200 bg-white py-4"
-    >
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate text-xl font-semibold text-slate-900">{item.name}</h3>
-          <p className="mt-1 line-clamp-4 text-sm leading-5 text-slate-500">
+    <article className={`delivery-product-card ${item.transparent ? `has-transparent-image image-${productVisualKind(item.name)}` : ''}`}>
+      <button type="button" onClick={() => onOpen(item)} className="delivery-product-hit" aria-label={`Abrir ${item.name}, ${formatPrice(item.price)}`}>
+        <div className="delivery-product-image">
+          {imgSrc ? (
+            <img
+              src={imgSrc}
+              alt=""
+              onError={onImgError}
+              style={imageTransitionActive ? { viewTransitionName: 'delivery-product-image' } : undefined}
+            />
+          ) : (
+            <div className="delivery-image-fallback"><Icon name={categoryIcon} size={30} /><span>Foto em breve</span></div>
+          )}
+        </div>
+        <div className="delivery-product-copy">
+          <h3>{item.name}</h3>
+          <p>
             {textoDescricaoItemPedir(item)}
           </p>
           {badges.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="delivery-badges">
               {badges.map((b) => (
-                <span key={b} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                <span key={b}>
                   {b}
                 </span>
               ))}
             </div>
           )}
-          <p className="mt-2 text-lg font-semibold text-slate-800">{formatPrice(item.price)}</p>
+          <strong>{formatPrice(item.price)}</strong>
         </div>
-        <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-          {imgSrc ? (
-            <img src={imgSrc} alt={item.name} className="h-full w-full object-cover" onError={onImgError} />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
-              <span className="text-3xl font-bold text-slate-400">{item.name?.charAt(0) || ''}</span>
-            </div>
-          )}
-        </div>
-      </div>
+        <span className="delivery-product-plus" aria-hidden="true">+</span>
+      </button>
     </article>
   )
 }
@@ -214,6 +273,7 @@ export default function PedirOnline() {
   const [pedidoSalvoLocal, setPedidoSalvoLocal] = useState(() => lerPedidoLocal())
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [modalProduct, setModalProduct] = useState(null)
+  const [transitionProductId, setTransitionProductId] = useState(null)
   const [modalQty, setModalQty] = useState(1)
   const [modalObs, setModalObs] = useState('')
   const [modalPfEspetinhoId, setModalPfEspetinhoId] = useState('')
@@ -223,7 +283,8 @@ export default function PedirOnline() {
   const [comboPfSelections, setComboPfSelections] = useState({})
   const [lastSuggestedAddedId, setLastSuggestedAddedId] = useState(null)
   const [cart, setCart] = useState([])
-  const [activeCatId, setActiveCatId] = useState(null)
+  const [activeCatId, setActiveCatId] = useState('all')
+  const [menuSearch, setMenuSearch] = useState('')
   const [checkout, setCheckout] = useState({
     tipo: 'retirada',
     cliente_nome: '',
@@ -250,8 +311,8 @@ export default function PedirOnline() {
       })
       .then((data) => {
         const items = (data.items || []).map((it) => {
-          const { image, imageFallback } = resolvePedirItemImages(it.name, apiBase)
-          return { ...it, image, imageFallback }
+          const { image, imageFallback, transparent } = resolvePedirItemImages(it.name, apiBase)
+          return { ...it, image, imageFallback, transparent: !!transparent }
         })
         setMenu({ ...data, items })
         setOnlineAtivo(data.online_ativo !== false)
@@ -313,6 +374,21 @@ export default function PedirOnline() {
     return [...fixed, ...rest, ...bebidas]
   }, [menu.categories, categoriesBySlug])
 
+  const arcCategories = useMemo(() => {
+    const requestedOrder = [
+      'bebidas',
+      'pratos',
+      'porcoes',
+      'espetinhos',
+      null,
+      'lanches',
+      'acompanhamentos',
+      'sobremesas',
+      'caipirinhas',
+    ]
+    return requestedOrder.map((slug) => slug === null ? null : categoriesBySlug[slug]).filter((category, index) => category || requestedOrder[index] === null)
+  }, [categoriesBySlug])
+
   const espetinhosOnline = useMemo(() => {
     const espetinhosCat = (menu.categories || []).find((c) => c.slug === 'espetinhos')
     if (!espetinhosCat) return []
@@ -321,11 +397,18 @@ export default function PedirOnline() {
       .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR'))
   }, [menu.categories, menu.items])
 
-  useEffect(() => {
-    if (!activeCatId && orderedCategories.length > 0) {
-      setActiveCatId(orderedCategories[0].id)
-    }
-  }, [orderedCategories, activeCatId])
+  const visibleMenuItems = useMemo(() => {
+    const visible = activeCatId === 'all'
+      ? (menu.items || []).filter((item) => {
+          const cat = (menu.categories || []).find((c) => c.id === item.category_id)
+          return cat && !HIDDEN_CATEGORY_SLUGS.includes(cat.slug)
+        })
+      : (itemsByCategory.get(activeCatId) || [])
+    const query = normalize(menuSearch.trim())
+    return [...visible]
+      .filter((item) => !query || normalize(`${item.name} ${textoDescricaoItemPedir(item)}`).includes(query))
+      .sort(bySort)
+  }, [activeCatId, menuSearch, menu.items, menu.categories, itemsByCategory])
 
   const destaqueCoracaoItem = useMemo(() => {
     const all = menu.items || []
@@ -435,6 +518,50 @@ export default function PedirOnline() {
     })
   }, [modalProduct, modalProductCategorySlug, modalExtraCebola, modalExtraBurger])
 
+  const canAnimateProductTransition = () => (
+    typeof document !== 'undefined' &&
+    typeof document.startViewTransition === 'function' &&
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+
+  const resetModalFields = () => {
+    setModalQty(1)
+    setModalObs('')
+    setModalPfEspetinhoId('')
+    setModalExtraCebola(false)
+    setModalExtraBurger(false)
+  }
+
+  const openProduct = (item) => {
+    if (!canAnimateProductTransition() || !item.image) {
+      setModalProduct(item)
+      return
+    }
+    flushSync(() => setTransitionProductId(item.id))
+    const transition = document.startViewTransition(() => {
+      flushSync(() => setModalProduct(item))
+    })
+    transition.finished.finally(() => setTransitionProductId(null))
+  }
+
+  const closeProduct = () => {
+    if (!modalProduct) return
+    const productId = modalProduct.id
+    const finishClose = () => {
+      setModalProduct(null)
+      resetModalFields()
+    }
+    if (!canAnimateProductTransition() || !modalProduct.image) {
+      finishClose()
+      return
+    }
+    flushSync(() => setTransitionProductId(productId))
+    const transition = document.startViewTransition(() => {
+      flushSync(finishClose)
+    })
+    transition.finished.finally(() => setTransitionProductId(null))
+  }
+
   useEffect(() => {
     if (!modalProduct) return
     setModalQty(1)
@@ -497,10 +624,7 @@ export default function PedirOnline() {
         ? { extra_caramelized_onion: modalExtraCebola, extra_hamburger: modalExtraBurger }
         : null
     addItem(modalProduct, modalQty, composed, null, isPratoFeito ? Number(modalPfEspetinhoId) : null, extras)
-    setModalProduct(null)
-    setModalQty(1)
-    setModalObs('')
-    setModalPfEspetinhoId('')
+    closeProduct()
   }
 
   const addSuggested = (item) => {
@@ -684,56 +808,54 @@ export default function PedirOnline() {
   }
 
   return (
-    <div className="public-menu min-h-screen w-full overflow-x-hidden bg-slate-50 pb-28 text-slate-900">
-      <div className="sticky top-0 z-40 w-full border-b border-slate-800 bg-black shadow-lg">
-        <header className="px-4 py-4 text-white">
-          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
-            <h1><img src="/logo-bosque-transparente-256.png" alt="Bosque da Carne" width="64" height="64" className="establishment-logo" /></h1>
-            <div className="flex shrink-0 items-center gap-2">
-              <Link to="/acompanhar" className="rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-medium">
-                Acompanhar
-              </Link>
-              <button
-                type="button"
-                onClick={() => setIsCartOpen(true)}
-                className="rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-medium"
-              >
-                Carrinho ({totalItems})
-              </button>
-            </div>
+    <div className="public-menu delivery-menu min-h-screen w-full overflow-x-hidden pb-28 text-slate-900">
+      {step === 'menu' && <div className="delivery-top">
+        <header className="delivery-header">
+          <div className="delivery-heading">
+            <h1>Com fome?</h1><span>Peça no Bosque.</span>
           </div>
-          <p className="mx-auto mt-1 w-full max-w-5xl text-xs text-slate-300">Pedidos online</p>
+          <button type="button" onClick={() => setIsCartOpen(true)} className="delivery-cart-button" aria-label={`Carrinho, ${totalItems} itens`}>
+            <Icon name="orders" size={20} />{totalItems > 0 && <b>{totalItems}</b>}
+          </button>
         </header>
+        <div className="delivery-search" role="search">
+          <span><Icon name="search" size={17} /></span>
+          <input aria-label="Buscar no cardápio" value={menuSearch} onChange={(event) => setMenuSearch(event.target.value)} placeholder="O que você quer pedir?" />
+          {menuSearch && <button type="button" onClick={() => setMenuSearch('')} aria-label="Limpar busca"><Icon name="close" size={15} /></button>}
+        </div>
         {entregaGratis && (
-          <p className="mx-auto w-full max-w-5xl bg-emerald-600 px-4 py-2 text-center text-sm font-semibold text-white">
-             Entrega grátis hoje!
-          </p>
+          <p className="delivery-free">Entrega grátis hoje</p>
         )}
-        {step === 'menu' && (
-          <nav className="no-scrollbar mx-auto flex w-full max-w-5xl gap-5 overflow-x-auto border-t border-slate-200 bg-white px-4 py-3">
-            {orderedCategories.map((c) => (
-              <a
-                key={c.id}
-                href={`#cat-${c.id}`}
-                onClick={() => setActiveCatId(c.id)}
-                className={`shrink-0 border-b-2 pb-1 text-sm font-semibold ${activeCatId === c.id ? 'border-red-600 text-red-600' : 'border-transparent text-slate-700'}`}
-              >
-                {c.name}
-              </a>
-            ))}
+          <nav className="delivery-category-arc" aria-label="Categorias do cardápio">
+            <div className="delivery-category-orbit">
+              {arcCategories.map((c, index) => {
+                const arcStyle = categoryArcStyle(index, arcCategories.length)
+                if (!c) return <button type="button" key="all" style={arcStyle} className={`category-all ${activeCatId === 'all' ? 'is-active' : ''}`} onClick={() => setActiveCatId('all')}>
+                  <span><Icon name="grid" size={20} /></span><b>Todos</b>
+                </button>
+                return <button type="button" key={c.id} className={activeCatId === c.id ? 'is-active' : ''} style={arcStyle} onClick={() => setActiveCatId(c.id)}>
+                  <span><Icon name={CATEGORY_ICON_BY_SLUG[c.slug] || 'book'} size={20} /></span>
+                  <b>{c.name}</b>
+                </button>
+              })}
+            </div>
           </nav>
-        )}
-      </div>
+      </div>}
 
       {step === 'menu' && (
         <main className="mx-auto mt-5 w-full max-w-5xl px-4">
           {pedidoSalvoLocal?.telefone && (
             <Link
               to="/acompanhar"
-              className="mb-4 flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 hover:bg-amber-100"
+              className="delivery-last-order"
             >
-              <span> Acompanhar meu último pedido</span>
-              <span className="text-amber-700">Ver →</span>
+              <span className="delivery-last-order-icon"><Icon name="receipt" size={20} /></span>
+              <span className="delivery-last-order-copy">
+                <small>Pedido #{pedidoSalvoLocal.id}</small>
+                <strong>Acompanhar meu último pedido</strong>
+                <span>Veja o preparo e a previsão de entrega</span>
+              </span>
+              <span className="delivery-last-order-action">Ver <Icon name="arrow" size={15} /></span>
             </Link>
           )}
           {error && (
@@ -742,6 +864,23 @@ export default function PedirOnline() {
               <button type="button" onClick={loadMenu} className="ml-2 rounded bg-red-100 px-2 py-1 font-semibold">Tentar novamente</button>
             </div>
           )}
+
+          <section className="delivery-catalog">
+            <div className="delivery-catalog-heading">
+              <div><span>Escolha o seu</span><h2>{activeCatId === 'all' ? 'Cardápio' : orderedCategories.find((c) => c.id === activeCatId)?.name}</h2></div>
+              <small>{visibleMenuItems.length} {visibleMenuItems.length === 1 ? 'opção' : 'opções'}</small>
+            </div>
+            <div className="delivery-products-grid">
+              {visibleMenuItems.map((item) => {
+                const n = normalize(item.name)
+                const category = orderedCategories.find((c) => c.id === item.category_id)
+                const badges = []
+                if (n.includes('gado') && n.includes('bacon')) badges.push('Mais pedido')
+                if (n.includes('churraspao') || n.includes('prato feito')) badges.push('Favorito')
+                return <ProductCard key={item.id} item={item} badges={badges} categoryIcon={CATEGORY_ICON_BY_SLUG[category?.slug] || 'book'} onOpen={openProduct} imageTransitionActive={transitionProductId === item.id && !modalProduct} />
+              })}
+            </div>
+          </section>
 
           {destaqueCoracaoItem && (
             <section className="mb-8 overflow-hidden rounded-2xl border-2 border-[hsl(var(--menu-primary))] bg-gradient-to-br from-orange-50 via-white to-amber-50/80 shadow-xl ring-1 ring-orange-200/60">
@@ -838,64 +977,70 @@ export default function PedirOnline() {
       )}
 
       {step === 'checkout' && (
-        <main className="mx-auto mt-5 w-full max-w-5xl px-4">
-          <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
-            <h3 className="text-xl font-semibold">Seu Pedido ({totalItems})</h3>
-            <ul className="mt-2 space-y-2 text-sm text-slate-700">
-              {cart.map((c, i) => (
-                <li key={`${c.id}-${c.user_note || ''}-${i}`} className="flex justify-between gap-2">
-                  <span>{c.quantity}x {c.name}</span>
-                  <span className="font-semibold">{formatPrice(c.quantity * c.price)}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3 space-y-1 border-t pt-3 text-sm text-slate-700">
-              <div className="flex justify-between">
-                <span>Subtotal (itens)</span>
-                <span className="font-semibold">{formatPrice(subtotalItens)}</span>
+        <main className="delivery-checkout-page">
+          <header className="delivery-checkout-header">
+            <button type="button" onClick={() => setStep('menu')} aria-label="Voltar ao cardápio"><Icon name="arrow" size={20} /></button>
+            <div><span>Finalização</span><h2>Seu pedido</h2></div>
+            <strong>{totalItems}</strong>
+          </header>
+
+          <form onSubmit={handleSubmitOrder} className="delivery-checkout-form">
+            {error && <p className="rounded-xl bg-red-100 p-3 text-sm text-red-700">{error}</p>}
+
+            <section className="delivery-checkout-block delivery-order-review">
+              {cart.map((item, i) => {
+                const source = menu.items.find((product) => Number(product.id) === Number(item.id))
+                const image = source?.image || source?.imageFallback
+                return (
+                  <article key={`${item.id}-${item.user_note || ''}-${i}`}>
+                    <div className={`delivery-checkout-thumb ${source?.transparent ? 'is-cutout' : ''}`}>
+                      {image ? <img src={image} alt="" /> : <Icon name="receipt" size={25} />}
+                    </div>
+                    <div className="delivery-checkout-item-copy">
+                      <h3>{item.name}</h3>
+                      <p>{item.quantity} {item.quantity === 1 ? 'unidade' : 'unidades'}{item.user_note ? ` · ${item.user_note}` : ''}</p>
+                      <strong>{formatPrice(item.price * item.quantity)}</strong>
+                    </div>
+                    <div className="delivery-checkout-qty" aria-label={`Quantidade de ${item.name}`}>
+                      <button type="button" onClick={() => updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, -1)}>−</button>
+                      <b>{item.quantity}</b>
+                      <button type="button" onClick={() => updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, 1)}>+</button>
+                    </div>
+                  </article>
+                )
+              })}
+            </section>
+
+            <section className="delivery-checkout-block">
+              <div className="delivery-checkout-block-title"><span><Icon name="pin" size={19} /></span><div><small>Como você quer receber?</small><strong>{checkout.tipo === 'delivery' ? 'Entregar em casa' : 'Retirar no Bosque'}</strong></div></div>
+              <div className="delivery-choice-toggle">
+                <button type="button" onClick={() => setCheckout((c) => ({ ...c, tipo: 'retirada' }))} className={checkout.tipo === 'retirada' ? 'is-active' : ''}>Retirada</button>
+                <button type="button" onClick={() => setCheckout((c) => ({ ...c, tipo: 'delivery' }))} className={checkout.tipo === 'delivery' ? 'is-active' : ''}>Entrega{entregaGratis ? ' grátis' : ''}</button>
               </div>
+
               {checkout.tipo === 'delivery' && (
-                <div className="flex justify-between text-slate-600">
-                  <span>Taxa de entrega</span>
-                  <span className={`font-semibold ${taxaEntrega === 0 ? 'text-emerald-600' : ''}`}>
-                    {taxaEntrega === 0 ? 'Grátis' : formatPrice(taxaEntrega)}
-                  </span>
+                <div className="delivery-address-fields">
+                  <input placeholder="Rua *" value={checkout.endereco_rua} onChange={(e) => setCheckout((c) => ({ ...c, endereco_rua: e.target.value }))} />
+                  <div>
+                    <input placeholder="Número *" value={checkout.endereco_numero} onChange={(e) => setCheckout((c) => ({ ...c, endereco_numero: e.target.value }))} />
+                    <input placeholder="Complemento" value={checkout.endereco_complemento} onChange={(e) => setCheckout((c) => ({ ...c, endereco_complemento: e.target.value }))} />
+                  </div>
+                  <input placeholder="Bairro *" value={checkout.endereco_bairro} onChange={(e) => setCheckout((c) => ({ ...c, endereco_bairro: e.target.value }))} />
+                  <input placeholder="Ponto de referência" value={checkout.endereco_referencia} onChange={(e) => setCheckout((c) => ({ ...c, endereco_referencia: e.target.value }))} />
                 </div>
               )}
-              <p className="pt-1 text-lg font-bold text-slate-900">Total: {formatPrice(totalPrice)}</p>
-            </div>
-          </div>
+            </section>
 
-          <form onSubmit={handleSubmitOrder} className="space-y-4">
-            {error && <p className="rounded-xl bg-red-100 p-3 text-sm text-red-700">{error}</p>}
-            <input className="w-full rounded-xl border px-4 py-3" placeholder="Nome completo *" required value={checkout.cliente_nome} onChange={(e) => setCheckout((c) => ({ ...c, cliente_nome: e.target.value }))} />
-            <input className="w-full rounded-xl border px-4 py-3" placeholder="Telefone / WhatsApp *" required value={checkout.cliente_telefone} onChange={(e) => setCheckout((c) => ({ ...c, cliente_telefone: e.target.value }))} />
-            <input className="w-full rounded-xl border px-4 py-3" placeholder="E-mail (opcional)" value={checkout.cliente_email} onChange={(e) => setCheckout((c) => ({ ...c, cliente_email: e.target.value }))} />
+            <section className="delivery-checkout-block delivery-customer-fields">
+              <div className="delivery-checkout-block-title"><span><Icon name="user" size={19} /></span><div><small>Dados para contato</small><strong>Quem está pedindo?</strong></div></div>
+              <input placeholder="Nome completo *" required value={checkout.cliente_nome} onChange={(e) => setCheckout((c) => ({ ...c, cliente_nome: e.target.value }))} />
+              <input placeholder="Telefone / WhatsApp *" required value={checkout.cliente_telefone} onChange={(e) => setCheckout((c) => ({ ...c, cliente_telefone: e.target.value }))} />
+              <input placeholder="E-mail (opcional)" value={checkout.cliente_email} onChange={(e) => setCheckout((c) => ({ ...c, cliente_email: e.target.value }))} />
+            </section>
 
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setCheckout((c) => ({ ...c, tipo: 'retirada' }))} className={`rounded-xl border px-4 py-3 font-semibold ${checkout.tipo === 'retirada' ? 'border-[hsl(var(--menu-primary))] bg-orange-50' : 'border-slate-300 bg-white'}`}>Retirada</button>
-              <button type="button" onClick={() => setCheckout((c) => ({ ...c, tipo: 'delivery' }))} className={`rounded-xl border px-4 py-3 font-semibold ${checkout.tipo === 'delivery' ? 'border-[hsl(var(--menu-primary))] bg-orange-50' : 'border-slate-300 bg-white'}`}>
-                Delivery{entregaGratis ? ' · grátis' : ''}
-              </button>
-            </div>
-
-            {checkout.tipo === 'delivery' && (
-              <div className="space-y-2 rounded-2xl border bg-white p-4">
-                <input className="w-full rounded-xl border px-4 py-3" placeholder="Rua *" value={checkout.endereco_rua} onChange={(e) => setCheckout((c) => ({ ...c, endereco_rua: e.target.value }))} />
-                <div className="grid grid-cols-2 gap-2">
-                  <input className="w-full rounded-xl border px-4 py-3" placeholder="Número *" value={checkout.endereco_numero} onChange={(e) => setCheckout((c) => ({ ...c, endereco_numero: e.target.value }))} />
-                  <input className="w-full rounded-xl border px-4 py-3" placeholder="Complemento" value={checkout.endereco_complemento} onChange={(e) => setCheckout((c) => ({ ...c, endereco_complemento: e.target.value }))} />
-                </div>
-                <input className="w-full rounded-xl border px-4 py-3" placeholder="Bairro *" value={checkout.endereco_bairro} onChange={(e) => setCheckout((c) => ({ ...c, endereco_bairro: e.target.value }))} />
-                <input className="w-full rounded-xl border px-4 py-3" placeholder="Referência" value={checkout.endereco_referencia} onChange={(e) => setCheckout((c) => ({ ...c, endereco_referencia: e.target.value }))} />
-              </div>
-            )}
-
-            <input className="w-full rounded-xl border px-4 py-3" placeholder="Observações (opcional)" value={checkout.observacoes} onChange={(e) => setCheckout((c) => ({ ...c, observacoes: e.target.value }))} />
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="mb-3 text-sm font-semibold text-slate-800">Forma de pagamento *</p>
-              <div className="grid gap-2 sm:grid-cols-2">
+            <section className="delivery-checkout-block delivery-payment-block">
+              <div className="delivery-checkout-block-title"><span><Icon name="wallet" size={19} /></span><div><small>Pagamento na entrega</small><strong>Escolha como pagar</strong></div></div>
+              <div className="delivery-payment-grid">
                 {[
                   ['pix', 'PIX'],
                   ['dinheiro', 'Dinheiro'],
@@ -905,9 +1050,7 @@ export default function PedirOnline() {
                 ].map(([val, lab]) => (
                   <label
                     key={val}
-                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium ${
-                      checkout.forma_pagamento === val ? 'border-[hsl(var(--menu-primary))] bg-orange-50' : 'border-slate-200 bg-slate-50'
-                    }`}
+                    className={checkout.forma_pagamento === val ? 'is-active' : ''}
                   >
                     <input
                       type="radio"
@@ -915,15 +1058,25 @@ export default function PedirOnline() {
                       value={val}
                       checked={checkout.forma_pagamento === val}
                       onChange={() => setCheckout((c) => ({ ...c, forma_pagamento: val }))}
-                      className="h-4 w-4 accent-[hsl(var(--menu-primary))]"
                     />
-                    {lab}
+                    <span>{lab}</span><b>✓</b>
                   </label>
                 ))}
               </div>
-            </div>
+            </section>
 
-            <button type="submit" disabled={submitting} className="w-full rounded-xl bg-black py-4 text-lg font-semibold text-white disabled:opacity-70">
+            <label className="delivery-checkout-note">
+              <Icon name="receipt" size={18} />
+              <input placeholder="Adicionar observação ao pedido" value={checkout.observacoes} onChange={(e) => setCheckout((c) => ({ ...c, observacoes: e.target.value }))} />
+            </label>
+
+            <section className="delivery-checkout-totals">
+              <div><span>Subtotal</span><b>{formatPrice(subtotalItens)}</b></div>
+              <div><span>Entrega</span><b className={taxaEntrega === 0 ? 'is-free' : ''}>{checkout.tipo === 'retirada' ? 'Retirada' : taxaEntrega === 0 ? 'Grátis' : formatPrice(taxaEntrega)}</b></div>
+              <div className="is-total"><span>Total</span><strong>{formatPrice(totalPrice)}</strong></div>
+            </section>
+
+            <button type="submit" disabled={submitting} className="delivery-confirm-order">
               {submitting ? 'Enviando...' : `Confirmar pedido - ${formatPrice(totalPrice)}`}
             </button>
           </form>
@@ -934,18 +1087,26 @@ export default function PedirOnline() {
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 sm:items-center"
           onClick={() => {
-            setModalProduct(null)
-            setModalQty(1)
-            setModalObs('')
-            setModalPfEspetinhoId('')
-            setModalExtraCebola(false)
-            setModalExtraBurger(false)
+            closeProduct()
           }}
         >
-          <div className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-float sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-2xl font-semibold">{modalProduct.name}</h3>
-            <p className="mt-1 text-sm leading-relaxed text-slate-600">{textoDescricaoItemPedir(modalProduct)}</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">{formatPrice(modalUnitWithAddons)}</p>
+          <div className="delivery-product-modal w-full max-w-md rounded-t-3xl bg-white p-5 shadow-float sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="delivery-modal-close" aria-label="Fechar detalhes" onClick={closeProduct}>×</button>
+            <div className={`delivery-modal-hero ${modalProduct.transparent ? `is-transparent image-${productVisualKind(modalProduct.name)}` : ''}`}>
+              {modalProduct.image && (
+                <img
+                  src={modalProduct.image}
+                  alt={modalProduct.name}
+                  style={transitionProductId === modalProduct.id ? { viewTransitionName: 'delivery-product-image' } : undefined}
+                />
+              )}
+            </div>
+            <div className="delivery-modal-summary">
+              <span>Direto da brasa</span>
+              <h3>{modalProduct.name}</h3>
+              <p>{textoDescricaoItemPedir(modalProduct)}</p>
+              <strong>{formatPrice(modalUnitWithAddons)}</strong>
+            </div>
 
             {isPratoFeitoItem(modalProduct) && (
               <div className="mt-4">
@@ -1062,84 +1223,66 @@ export default function PedirOnline() {
       })()}
 
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 bg-black/45" onClick={() => setIsCartOpen(false)}>
+        <div className="delivery-cart-overlay" onClick={() => setIsCartOpen(false)}>
           <aside
-            className="absolute right-0 top-0 flex h-full min-h-0 w-full max-w-md flex-col bg-white shadow-float"
+            className="delivery-cart-panel"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-4">
-              <h3 className="text-2xl font-semibold">Seu Pedido ({totalItems})</h3>
-              <button type="button" onClick={() => setIsCartOpen(false)} className="rounded-lg border px-3 py-1">X</button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3 [-webkit-overflow-scrolling:touch]">
-              {cart.length === 0 && <p className="text-slate-600">Carrinho vazio.</p>}
+            <header className="delivery-cart-header">
+              <button type="button" onClick={() => setIsCartOpen(false)} aria-label="Voltar"><Icon name="arrow" size={20} /></button>
+              <div><span>Revise antes de continuar</span><h3>Seu pedido</h3></div>
+              <b>{totalItems}</b>
+            </header>
+            <div className="delivery-cart-scroll">
+              {cart.length === 0 && <div className="delivery-cart-empty"><Icon name="orders" size={34} /><strong>Seu carrinho está vazio</strong><span>Escolha algo gostoso no cardápio.</span></div>}
               {cart.length > 0 && (
-                <div className="space-y-2">
-                  {cart.map((item, i) => (
-                    <div
+                <div className="delivery-cart-items">
+                  {cart.map((item, i) => {
+                    const source = menu.items.find((product) => Number(product.id) === Number(item.id))
+                    const image = source?.image || source?.imageFallback
+                    return (
+                    <article
                       key={`${item.id}-${item.user_note || ''}-${item.prato_feito_espetinho_id || ''}-${item.extra_caramelized_onion ? '1' : '0'}-${item.extra_hamburger ? '1' : '0'}-${i}`}
-                      className="rounded-xl border p-3"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-semibold">{item.name}</p>
-                        <p className="font-bold">{formatPrice(item.price * item.quantity)}</p>
+                      <div className={`delivery-cart-thumb ${source?.transparent ? 'is-cutout' : ''}`}>
+                        {image ? <img src={image} alt="" /> : <Icon name="receipt" size={24} />}
                       </div>
-                      {item.user_note && <p className="mt-1 text-xs text-slate-500">{item.user_note}</p>}
-                      {(item.extra_caramelized_onion || item.extra_hamburger) && (
-                        <p className="mt-1 text-xs font-medium text-emerald-800">
+                      <div className="delivery-cart-item-copy">
+                        <h4>{item.name}</h4>
+                        {item.user_note && <p>{item.user_note}</p>}
+                        {(item.extra_caramelized_onion || item.extra_hamburger) && (
+                          <p>
                           {item.extra_caramelized_onion ? `+ cebola caramelizada (${formatPrice(PRECO_CEbola_CARAMELIZADA)})` : ''}
                           {item.extra_caramelized_onion && item.extra_hamburger ? ' · ' : ''}
                           {item.extra_hamburger ? `+ hambúrguer extra (${formatPrice(PRECO_HAMBURGUER_EXTRA)})` : ''}
-                        </p>
-                      )}
-                      <div className="mt-2 flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="h-9 w-9 rounded-full border font-bold"
-                          onClick={() =>
-                            updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, -1)
-                          }
-                        >
-                          -
-                        </button>
-                        <span className="w-8 text-center font-bold">{item.quantity}</span>
-                        <button
-                          type="button"
-                          className="h-9 w-9 rounded-full border font-bold"
-                          onClick={() =>
-                            updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, 1)
-                          }
-                        >
-                          +
-                        </button>
+                          </p>
+                        )}
+                        <strong>{formatPrice(item.price * item.quantity)}</strong>
                       </div>
-                    </div>
-                  ))}
+                      <div className="delivery-cart-qty">
+                        <button type="button" onClick={() => updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, -1)}>−</button>
+                        <b>{item.quantity}</b>
+                        <button type="button" onClick={() => updateQty(item.id, item.user_note, item.prato_feito_espetinho_id, item.extra_caramelized_onion, item.extra_hamburger, 1)}>+</button>
+                      </div>
+                    </article>
+                    )
+                  })}
                 </div>
               )}
             </div>
             {cart.length > 0 && (
-              <div className="shrink-0 space-y-1 border-t border-slate-200 bg-white px-4 py-4 text-sm text-slate-600">
-                <div className="flex justify-between">
-                  <span>Subtotal (itens)</span>
-                  <span className="font-semibold">{formatPrice(subtotalItens)}</span>
-                </div>
-                {checkout.tipo === 'delivery' && (
-                  <div className="flex justify-between">
-                    <span>Taxa de entrega</span>
-                    <span className={`font-semibold ${taxaEntrega === 0 ? 'text-emerald-600' : ''}`}>
-                      {taxaEntrega === 0 ? 'Grátis' : formatPrice(taxaEntrega)}
-                    </span>
-                  </div>
-                )}
-                <p className="pt-1 text-xl font-semibold text-slate-900">Total: {formatPrice(totalPrice)}</p>
-                <button type="button" onClick={() => { setIsCartOpen(false); setStep('checkout') }} className="mt-3 w-full rounded-xl bg-black py-3 font-semibold text-white">
-                  Finalizar pedido
+              <footer className="delivery-cart-footer">
+                <button type="button" className="delivery-cart-route" onClick={() => setCheckout((c) => ({ ...c, tipo: c.tipo === 'delivery' ? 'retirada' : 'delivery' }))}>
+                  <span><Icon name={checkout.tipo === 'delivery' ? 'pin' : 'orders'} size={19} /></span>
+                  <div><small>Recebimento</small><strong>{checkout.tipo === 'delivery' ? 'Entregar em casa' : 'Retirar no Bosque'}</strong></div>
+                  <b>Alterar</b>
                 </button>
-                <button type="button" onClick={clearCart} className="mt-2 w-full rounded-xl border border-slate-300 py-2.5 font-semibold text-slate-700">
-                  Limpar carrinho
+                <div className="delivery-cart-total"><span>Total</span><strong>{formatPrice(totalPrice)}</strong></div>
+                <button type="button" onClick={() => { setIsCartOpen(false); setStep('checkout') }} className="delivery-cart-continue">
+                  Ir para pagamento <Icon name="arrow" size={18} />
                 </button>
-              </div>
+                <button type="button" onClick={clearCart} className="delivery-cart-clear">Limpar carrinho</button>
+              </footer>
             )}
           </aside>
         </div>

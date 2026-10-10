@@ -30,6 +30,13 @@ const paths = {
   trash: "M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v6 M14 11v6",
   card: "M3 6h18v12H3z M3 10h18 M6 15h4",
   bolt: "M13 3 4 14h6l-1 7 9-11h-6l1-7z",
+  skewer: "M4 20L20 4 M6.5 14.5l3 3 3-3-3-3-3 3z M11.5 9.5l3 3 3-3-3-3-3 3z",
+  burger: "M4 10h16 M5 8c.7-4.7 13.3-4.7 14 0H5z M4 13h16 M5 16h14l-2 3H7l-2-3z",
+  plate: "M3 14h18 M5 13a7 7 0 0 1 14 0 M12 6V4 M7 18h10",
+  bowl: "M4 11h16c-.7 5.3-3.4 8-8 8s-7.3-2.7-8-8z M8 22h8 M8 7c0-2 2-3 4-3s4 1 4 3",
+  dessert: "M5 10h14l-2 10H7L5 10z M7 10c.4-4 9.6-4 10 0 M12 6V3 M10 3h4",
+  bottle: "M9 3h6 M10 3v5l-2 3v10h8V11l-2-3V3 M8 14h8 M10 6h4",
+  cocktail: "M4 4h16l-8 9L4 4z M7 7h10 M12 13v8 M8 21h8 M16 6l3-4",
 };
 export default function Icon({ name, size = 20, ...props }) {
   return (
