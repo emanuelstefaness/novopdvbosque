@@ -257,10 +257,12 @@ const ACAO_POR_STATUS = {
   saiu_entrega: 'dispatch',
 };
 
+/** Pedidos para os quais já enviamos readyToPickup (compartilhado entre instâncias do cliente). */
+const prontos = new Set();
+
 export function criarClienteIfood({ clientId, clientSecret, baseUrl = IFOOD_API_BASE, fetchImpl = fetch } = {}) {
   let token = null;
   let expira = 0;
-  const prontos = new Set();
 
   async function autenticar() {
     if (token && Date.now() < expira) return token;
