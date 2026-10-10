@@ -318,15 +318,13 @@
   .delivery-category-arc button.arc-side-right.is-active::after { display:none; }
 }
 
-/* Identidade visual: a logo do Bosque repetida, bem sutil e mais clara que o fundo, atrás da meia-lua. */
+/* Identidade visual: a logo do Bosque repetida, muito sutil e mais clara que o fundo, cobrindo toda a área da meia-lua. */
 .delivery-category-arc::before {
   content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
   background:url("/padrao-logo-bosque.png") center top / 118px auto repeat;
-  opacity:.62;
-  -webkit-mask-image:linear-gradient(to bottom, #000 0, #000 55%, transparent 100%);
-  mask-image:linear-gradient(to bottom, #000 0, #000 55%, transparent 100%);
+  opacity:.26;
 }
 .delivery-category-orbit { z-index:1; }
 @media (max-width:560px) {
-  .delivery-category-arc::before { background-size:84px auto; opacity:.58; }
+  .delivery-category-arc::before { background-size:84px auto; opacity:.24; }
 }
