@@ -1,8 +1,7 @@
 /** Regras de apresentação das telas de produção (Cozinha, Churrasqueira, Bar). Não altera dados nem a lógica de negócio. */
 import { parseSqlLocalDate, earliestCreatedAt } from './pedidoTime.js'
 
-/** Mesmos limites já usados no sistema: a partir de 20 min o tempo fica vermelho. Atenção (amarelo) começa em 10 min. */
-export const ATENCAO_MIN = 10
+/** Mesmo limite já usado no sistema: a partir de 20 min o tempo fica vermelho. */
 export const ATRASO_MIN = 20
 
 /** Agrupa os pedidos da fila por comanda mantendo a ordem de lançamento (Map: JS reordena chaves inteiras de objetos). */
@@ -42,11 +41,11 @@ export function formatarDecorrido(sqlCreatedAt, agora = Date.now()) {
 /** Prioridade da comanda pelo item mais antigo na fila. */
 export function prioridadeDaComanda(items, agora = Date.now()) {
   const minutos = minutosDesde(earliestCreatedAt(items), agora)
-  const nivel = minutos >= ATRASO_MIN ? 'atrasado' : minutos >= ATENCAO_MIN ? 'atencao' : 'normal'
+  const nivel = minutos >= ATRASO_MIN ? 'atrasado' : 'normal'
   return { nivel, minutos }
 }
 
-export const ROTULO_PRIORIDADE = { atrasado: 'Atrasado', atencao: 'Atenção', normal: 'No prazo' }
+export const ROTULO_PRIORIDADE = { atrasado: 'Atrasado', normal: 'No prazo' }
 
 /** "Mesa 8" para números; textos como "Online #1" ficam como estão. Pedido do iFood não tem mesa (o selo já traz o número). */
 export function rotuloDaMesa(item) {

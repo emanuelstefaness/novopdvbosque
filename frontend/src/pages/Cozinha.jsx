@@ -1,14 +1,10 @@
 import '../production.css'
-import '../kds.css'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { getPedidosKitchen, setPedidoSectorStatus, fulfillKitchenUnit } from '../api'
 import { useSocket } from '../socket'
-import ComandaCabecalho from '../components/producao/ComandaCabecalho'
-import useAgora from '../hooks/useAgora'
-import useComandasNovas from '../hooks/useComandasNovas'
-import { agruparPorComanda, autoriaDaComanda, formatarDecorrido, prioridadeDaComanda } from '../utils/producao'
+import PedidoElapsed from '../components/PedidoElapsed'
 import {earliestCreatedAt} from '../utils/pedidoTime'
-import { tipoOnlineFromPedido } from '../utils/comandaOnlineVisual'
+import { comandaOnlineLabel, comandaOrigemLabel, isPedidoOnline, tipoOnlineFromPedido } from '../utils/comandaOnlineVisual'
 import { observacaoParaProducao } from '../utils/productionObservations'
 import { textoResumoAddonsPedido } from '../utils/lancheAddons'
 
@@ -58,14 +54,11 @@ function buildPratoFeitoProductionSummary(pedidos) {
 
 export default function Cozinha() {
   const [list, setList] = useState([])
-  const [carregado, setCarregado] = useState(false)
   const loadTimeoutRef = useRef(null)
-  const agora = useAgora()
 
   const load = async () => {
     const pedidos = await getPedidosKitchen()
     setList(pedidos)
-    setCarregado(true)
   }
 
   useEffect(() => { const initial=setTimeout(()=>void load(),0); return () => { clearTimeout(initial); if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current) } }, [])
@@ -101,17 +94,6 @@ export default function Cozinha() {
     }
   }
 
-  /** Marca como pronto todos os pedidos da comanda na cozinha (mesma ação do botão de cada item). */
-  const setCardAllReadyKitchen = async (items) => {
-    const ids = new Set(items.map((p) => p.id))
-    setList((prev) => prev.filter((p) => !ids.has(p.id)))
-    try {
-      await Promise.all(items.map((p) => setPedidoSectorStatus(p.id, 'kitchen', 'ready')))
-    } finally {
-      load()
-    }
-  }
-
   const pratoFeitoMinusOne = async () => {
     if (pratoFeitoPedidos.length === 0) return
     const sorted = [...pratoFeitoPedidos].sort(
@@ -135,8 +117,6 @@ export default function Cozinha() {
   const pratoFeitoPedidos = list.filter((p) => p.prato_feito_espetinho_name)
   const totalPratoFeito = pratoFeitoPedidos.reduce((s, p) => s + (p.quantity || 1), 0)
 
-  const cardsPorComanda = useMemo(() => agruparPorComanda(outrosPedidos), [outrosPedidos])
-  const novas = useComandasNovas(cardsPorComanda.map((c) => c.comanda_id), carregado)
   const productionByItem = useMemo(() => buildKitchenProductionCards(outrosPedidos), [outrosPedidos])
   const pratoFeitoSummary = useMemo(() => buildPratoFeitoProductionSummary(pratoFeitoPedidos), [pratoFeitoPedidos])
   const pratoFeitoTemDelivery = useMemo(
@@ -150,11 +130,11 @@ export default function Cozinha() {
   const pratoFeitoTemOnline = pratoFeitoTemDelivery || pratoFeitoTemRetirada
 
   return (
-    <div className="prod-page kds-page">
+    <div className="prod-page">
       <div className="prod-main">
         <div className="prod-head">
-          <h1 className="kds-titulo">Cozinha</h1>
-          <p className="kds-sub">Pedidos organizados por comanda e prioridade de preparo.</p>
+          <h1 className="prod-title">Cozinha</h1>
+          <p className="prod-sub">Pedidos organizados por comanda e prioridade de preparo.</p>
         </div>
         <div className="prod-totals">
           <h2 className="prod-totals-title">Total para produção</h2>
@@ -206,102 +186,71 @@ export default function Cozinha() {
           )}
         </div>
 
-        <div className="kds-board">
-          {cardsPorComanda.map((card) => {
-            const { nivel } = prioridadeDaComanda(card.items, agora)
-            const tipo = tipoOnlineFromPedido(card.items[0])
-            const modo = tipo ? `is-${tipo}` : ''
-            const { nomes } = autoriaDaComanda(card.items)
+        <div className="prod-list">
+          {outrosPedidos.map((p) => {
+            const obsShow = observacaoParaProducao(p.observations)
+            const addLab = textoResumoAddonsPedido(p)
+            const tipo = tipoOnlineFromPedido(p)
+            const modo = tipo === 'delivery' ? 'is-delivery' : tipo === 'retirada' ? 'is-retirada' : ''
             return (
-              <section
-                key={card.comanda_id}
-                aria-label={`Produção da comanda ${card.items[0]?.production_number || card.comanda_id}`}
-                className={`kds-card is-${nivel} ${modo} ${novas.has(card.comanda_id) ? 'is-nova' : ''}`}
-              >
-                <span className="kds-faixa" aria-hidden="true" />
-                <ComandaCabecalho itens={card.items} agora={agora} onTudoPronto={() => setCardAllReadyKitchen(card.items)} />
-                <ul className="kds-itens">
-                  {card.items.map((p) => {
-                    const obsShow = observacaoParaProducao(p.observations)
-                    const addLab = textoResumoAddonsPedido(p)
-                    const qtd = p.quantity || 1
-                    const autor = p.launched_by && nomes.length > 1 ? p.launched_by : ''
-                    return (
-                      <li key={p.id} className="kds-item">
-                        <span className="kds-qtd" aria-label={`Quantidade ${qtd}`}>{qtd}</span>
-                        <div className="kds-item-corpo">
-                          <div className="kds-item-nome">
-                            {p.item_name}
-                            {addLab ? <span className="kds-chip is-neutro" style={{ marginLeft: 6 }}>{addLab}</span> : null}
-                          </div>
-                          {p.waiting_grill && <div className="kds-item-aviso">aguardando churrasqueira</div>}
-                          {obsShow && <div className="kds-item-obs">{obsShow}</div>}
-                          <div className="kds-item-meta">
-                            <span title="Tempo deste item na fila">{formatarDecorrido(p.created_at, agora)}</span>
-                            {autor && <span className="kds-item-autor">por {autor}</span>}
-                          </div>
-                        </div>
-                        <div className="kds-acoes">
-                          {qtd > 1 && (
-                            <button type="button" className="kds-btn is-neutro is-compacto" title="Menos 1 na produção" aria-label={`Menos 1 unidade de ${p.item_name}`} onClick={() => fulfillOneKitchenUnit(p)}>−1</button>
-                          )}
-                          <button
-                            type="button"
-                            className="kds-btn"
-                            title={qtd > 1 ? 'Marcar todas as unidades deste pedido' : undefined}
-                            onClick={() => markKitchenFullyReady(p.id)}
-                          >
-                            {qtd > 1 ? 'Todos' : 'Pronto'}
-                          </button>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </section>
+              <div key={p.id} className={`prod-row ${modo}`}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="prod-row-title">
+                    <em>{p.quantity}x</em> {p.item_name}
+                    {addLab ? <span className="prod-chip" style={{ marginLeft: 6 }}>{addLab}</span> : null}
+                  </div>
+                  <div className="prod-row-meta">
+                    {comandaOrigemLabel(p) && <span className="prod-chip is-ifood">{comandaOrigemLabel(p)}</span>}
+                    {comandaOnlineLabel(p.comanda_tipo_online) && <span className={`prod-chip ${modo}`}>{comandaOnlineLabel(p.comanda_tipo_online)}</span>}
+                    {p.mesa && isPedidoOnline(p) && <span>{p.mesa}</span>}
+                    {p.waiting_grill && <span className="warn">aguardando churrasqueira</span>}
+                    {p.launched_by ? <span>Lançado por <b>{p.launched_by}</b></span> : p.waiter_name && <span>Garçom: {p.waiter_name}</span>}
+                    <PedidoElapsed createdAt={p.created_at} className="text-xs" />
+                  </div>
+                  {obsShow && <div className="prod-item-note">Obs.: {obsShow}</div>}
+                </div>
+                <div className="prod-actions">
+                  {(p.quantity || 1) > 1 && (
+                    <button type="button" className="prod-btn is-ghost" title="Menos 1 na produção" onClick={() => fulfillOneKitchenUnit(p)}>−1</button>
+                  )}
+                  <button
+                    type="button"
+                    className="prod-btn"
+                    title={(p.quantity || 1) > 1 ? 'Marcar todas as unidades deste pedido' : undefined}
+                    onClick={() => markKitchenFullyReady(p.id)}
+                  >
+                    {(p.quantity || 1) > 1 ? 'Tudo pronto' : 'Pronto'}
+                  </button>
+                </div>
+              </div>
             )
           })}
           {pratoFeitoPedidos.length > 0 && (
-            <section className="kds-card is-pf" aria-label="Prato Feito">
-              <span className="kds-faixa" aria-hidden="true" />
-              <header className="kds-head">
-                <div className="kds-head-top">
-                  <h2 className="kds-numero">Prato Feito</h2>
-                  <span className="kds-tempo">{formatarDecorrido(earliestCreatedAt(pratoFeitoPedidos), agora)}</span>
-                </div>
-                <div className="kds-head-linha kds-head-autoria">
-                  {autoriaDaComanda(pratoFeitoPedidos).nomes.length > 0 && (
-                    <span className="kds-garcom"><span className="kds-garcom-nome">{autoriaDaComanda(pratoFeitoPedidos).nomes.join(', ')}</span></span>
+            <div className="prod-row is-pf">
+              <div style={{ minWidth: 0 }}>
+                <div className="prod-row-title"><em>{totalPratoFeito}x</em> Prato Feito</div>
+                <div className="prod-row-meta">
+                  {pratoFeitoTemOnline && (
+                    <span className={`prod-chip ${pratoFeitoTemDelivery ? 'is-delivery' : 'is-retirada'}`}>
+                      {pratoFeitoTemDelivery && pratoFeitoTemRetirada
+                        ? 'Online: entrega + retirada'
+                        : pratoFeitoTemDelivery
+                          ? 'Online: entrega (embalar)'
+                          : 'Online: retirada no balcão'}
+                    </span>
                   )}
+                  {pratoFeitoPedidos[0]?.waiter_name && <span>Garçom: {pratoFeitoPedidos[0].waiter_name}</span>}
+                  <PedidoElapsed createdAt={earliestCreatedAt(pratoFeitoPedidos)} className="text-xs" />
                 </div>
-                <div className="kds-head-rodape">
-                  <div className="kds-badges">
-                    {pratoFeitoTemOnline && (
-                      <span className={`kds-chip is-${pratoFeitoTemDelivery ? 'delivery' : 'retirada'}`}>
-                        {pratoFeitoTemDelivery && pratoFeitoTemRetirada
-                          ? 'Online: entrega + retirada'
-                          : pratoFeitoTemDelivery
-                            ? 'Online: entrega (embalar)'
-                            : 'Online: retirada no balcão'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </header>
-              <ul className="kds-itens">
-                <li className="kds-item">
-                  <span className="kds-qtd">{totalPratoFeito}</span>
-                  <div className="kds-item-corpo"><div className="kds-item-nome">Prato Feito</div></div>
-                  <div className="kds-acoes">
-                    <button type="button" className="kds-btn is-neutro is-compacto" title="Diminuir 1" aria-label="Diminuir 1 prato feito" onClick={() => pratoFeitoMinusOne()}>−1</button>
-                    <button type="button" className="kds-btn" onClick={setAllPratoFeitoReady}>Pronto (todos)</button>
-                  </div>
-                </li>
-              </ul>
-            </section>
+              </div>
+              <div className="prod-actions">
+                <button type="button" className="prod-btn is-ghost" title="Diminuir 1" onClick={() => pratoFeitoMinusOne()}>−1</button>
+                <button type="button" className="prod-btn" onClick={setAllPratoFeitoReady}>Pronto (todos)</button>
+              </div>
+            </div>
           )}
+          {list.length === 0 && <p className="prod-empty">Nenhum pedido no momento.</p>}
         </div>
-        {list.length === 0 && <p className="prod-empty">Nenhum pedido no momento.</p>}
       </div>
     </div>
   )

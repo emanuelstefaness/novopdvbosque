@@ -16,9 +16,9 @@ const sql = (minAtras, agora) => {
 }
 const AGORA = Date.now()
 
-test('prioridade: normal < 10 min, atenção 10–19, atrasado a partir de 20', () => {
+test('prioridade: no prazo até 19 min, atrasado a partir de 20 (sem faixa intermediária)', () => {
   assert.equal(prioridadeDaComanda([{ created_at: sql(3, AGORA) }], AGORA).nivel, 'normal')
-  assert.equal(prioridadeDaComanda([{ created_at: sql(12, AGORA) }], AGORA).nivel, 'atencao')
+  assert.equal(prioridadeDaComanda([{ created_at: sql(19, AGORA) }], AGORA).nivel, 'normal')
   assert.equal(prioridadeDaComanda([{ created_at: sql(25, AGORA) }], AGORA).nivel, 'atrasado')
 })
 

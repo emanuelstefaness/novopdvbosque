@@ -40,12 +40,40 @@
 }
 .kds-indicador b { font-size: 17px; font-weight: 800; color: var(--kds-ink); font-variant-numeric: tabular-nums; }
 
-/* Grade: cresce conforme o espaço, sem altura fixa e sem rolagem horizontal */
+/* Quadro horizontal: comandas lado a lado, com rolagem lateral quando passam da largura da tela */
 .kds-board {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr));
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
   gap: 14px;
-  align-items: start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 14px;
+  background: #0b1017;
+  border: 1px solid var(--kds-line);
+  border-radius: 14px;
+  max-height: calc(100vh - 190px);
+  scroll-snap-type: x proximity;
+  scrollbar-color: #4a5566 #0b1017;
+  scrollbar-width: thin;
+}
+.kds-board > .kds-card {
+  flex: 0 0 340px;
+  width: 340px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  scroll-snap-align: start;
+}
+/* Cada card cresce conforme os itens; passando da altura da tela, rola por dentro */
+.kds-board > .kds-card .kds-head { flex: 0 0 auto; }
+.kds-board > .kds-card .kds-itens {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-color: #4a5566 transparent;
+  scrollbar-width: thin;
 }
 
 /* Card */
@@ -64,7 +92,6 @@
   height: 4px;
   background: var(--kds-info);
 }
-.kds-card.is-atencao .kds-faixa { background: var(--kds-warn); }
 .kds-card.is-atrasado .kds-faixa { background: var(--kds-late); }
 .kds-card.is-pf .kds-faixa { background: var(--kds-warn); }
 .kds-card.is-nova { border-color: var(--kds-ok); box-shadow: 0 0 0 1px rgba(53, 214, 124, 0.35); animation: kds-entrada 0.45s ease-out; }
@@ -79,7 +106,6 @@
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 14px; font-weight: 700; color: var(--kds-muted); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.kds-tempo.is-atencao { color: var(--kds-warn); }
 .kds-tempo.is-atrasado { color: var(--kds-late); }
 .kds-head-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
 .kds-mesa { font-size: 15px; font-weight: 650; color: var(--kds-ink); }
@@ -105,7 +131,6 @@
 .kds-chip.is-delivery { color: var(--kds-info); border-color: rgba(67, 165, 245, 0.45); background: rgba(67, 165, 245, 0.1); }
 .kds-chip.is-retirada { color: var(--kds-retirada); border-color: rgba(54, 194, 180, 0.45); background: rgba(54, 194, 180, 0.1); }
 .kds-chip.is-status-normal { color: var(--kds-muted); }
-.kds-chip.is-status-atencao { color: var(--kds-warn); border-color: rgba(245, 184, 46, 0.5); background: rgba(245, 184, 46, 0.1); }
 .kds-chip.is-status-atrasado { color: var(--kds-late); border-color: rgba(255, 70, 88, 0.5); background: rgba(255, 70, 88, 0.1); }
 .kds-chip.is-neutro { color: var(--kds-muted); }
 
@@ -175,7 +200,7 @@
 /* Telas pequenas: uma coluna, alvos de toque confortáveis */
 @media (max-width: 720px) {
   .kds-titulo { font-size: 24px; }
-  .kds-board { grid-template-columns: 1fr; }
+  .kds-board > .kds-card { flex-basis: 300px; width: 300px; }
   .kds-item { grid-template-columns: 38px minmax(0, 1fr); }
   .kds-acoes { grid-column: 1 / -1; justify-content: flex-end; }
 }
