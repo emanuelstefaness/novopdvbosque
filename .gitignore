@@ -14,3 +14,7 @@ ULTIMO_LINK_TUNEL.txt
 
 # backups locais do banco
 backend/*.backup-*.db
+
+# copias do .env com credenciais
+backend/.env.*
+!backend/.env.example
