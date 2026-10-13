@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { broadcastAll } from '../socket.js';
+import { fecharProducaoDoPedido } from '../orderProduction.js';
 import { ifoodConfigurado, criarClienteIfood, cancelarNoIfood, modoIfood } from '../ifood.js';
 
 export const ordersRouter = Router();
@@ -56,6 +57,10 @@ ordersRouter.patch('/:id/status', (req, res) => {
     `).run(status, id);
   }
   if (status === 'entregue') db.prepare("UPDATE orders SET delivered_at=COALESCE(delivered_at,datetime('now','localtime')) WHERE id=?").run(id);
+  // Pedido cancelado ou entregue sai da fila de produção (Cozinha, Churrasqueira, Bar).
+  if (status === 'cancelado' || status === 'entregue') {
+    if (fecharProducaoDoPedido(db, id, status) > 0) broadcastAll('pedidos', {});
+  }
   // Pedido do iFood: avisa o iFood da mudança (preparo, pronto, despacho, cancelamento). Falha aqui não trava o PDV.
   if (order.origem === 'ifood' && order.external_id && ifoodConfigurado() && modoIfood() === 'integrado') {
     const cliente = criarClienteIfood({ clientId: process.env.IFOOD_CLIENT_ID, clientSecret: process.env.IFOOD_CLIENT_SECRET, baseUrl: process.env.IFOOD_API_BASE || undefined });

@@ -10,6 +10,7 @@
  */
 import { dispatchItemsToSectors } from './routes/public.js';
 import { broadcastAll } from './socket.js';
+import { fecharProducaoDoPedido } from './orderProduction.js';
 
 export const IFOOD_API_BASE = 'https://merchant-api.ifood.com.br';
 const CATEGORIA_NAO_MAPEADOS = { name: 'iFood (não mapeados)', slug: 'ifood-nao-mapeados' };
@@ -228,6 +229,8 @@ export function cancelarPedidoIfood(db, externalId, motivo = 'Cancelado no iFood
   const o = db.prepare("SELECT id, status FROM orders WHERE origem = 'ifood' AND external_id = ?").get(String(externalId));
   if (!o || o.status === 'cancelado' || o.status === 'entregue') return false;
   db.prepare(`UPDATE orders SET status = 'cancelado', motivo_cancelamento = ?, updated_at = datetime('now','localtime') WHERE id = ?`).run(motivo, o.id);
+  fecharProducaoDoPedido(db, o.id, 'cancelado');
+  broadcastAll('pedidos', {});
   broadcastAll('orders', {});
   broadcastAll('comandas', {});
   return true;
@@ -345,7 +348,11 @@ export function sincronizarStatusIfood(db, externalId, novo) {
   if (!o || o.status === 'cancelado' || o.status === 'entregue') return false;
   if (ORDEM_STATUS.indexOf(novo) <= ORDEM_STATUS.indexOf(o.status)) return false;
   db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(novo, o.id);
-  if (novo === 'entregue') db.prepare("UPDATE orders SET delivered_at = COALESCE(delivered_at, datetime('now','localtime')) WHERE id = ?").run(o.id);
+  if (novo === 'entregue') {
+    db.prepare("UPDATE orders SET delivered_at = COALESCE(delivered_at, datetime('now','localtime')) WHERE id = ?").run(o.id);
+    fecharProducaoDoPedido(db, o.id, 'entregue');
+    broadcastAll('pedidos', {});
+  }
   broadcastAll('orders', {});
   broadcastAll('comandas', {});
   return true;

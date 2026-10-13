@@ -347,4 +347,17 @@ test("21. Entrega pela logística do iFood (deliveredBy IFOOD): o PDV não envia
   assert.equal(db.prepare("SELECT entrega_por FROM orders WHERE id = ?").get(r.orderId).entrega_por, "IFOOD");
 });
 
+test("22. Pedido cancelado ou concluído sai da fila de produção (não fica contando na Cozinha)", () => {
+  const abertos = (comandaId) => db.prepare("SELECT COUNT(*) AS n FROM pedidos WHERE comanda_id = ? AND status NOT IN ('cancelled','delivered')").get(comandaId).n;
+  const a = ifood.importarPedidoIfood(db, pedido(), { avisar: false });
+  assert.ok(abertos(a.comandaId) > 0);
+  ifood.cancelarPedidoIfood(db, db.prepare("SELECT external_id FROM orders WHERE id=?").get(a.orderId).external_id);
+  assert.equal(abertos(a.comandaId), 0, "cancelado no iFood esvazia a produção");
+  const b = ifood.importarPedidoIfood(db, pedido(), { avisar: false });
+  ifood.sincronizarStatusIfood(db, db.prepare("SELECT external_id FROM orders WHERE id=?").get(b.orderId).external_id, "entregue");
+  assert.equal(abertos(b.comandaId), 0, "concluído no iFood esvazia a produção");
+  const fila = db.prepare("SELECT COUNT(*) AS n FROM pedido_sector_status s JOIN pedidos p ON p.id = s.pedido_id WHERE p.comanda_id IN (?, ?) AND s.status != 'ready'").get(a.comandaId, b.comandaId).n;
+  assert.equal(fila, 0);
+});
+
 test.after(() => server.close());
