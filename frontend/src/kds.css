@@ -1,0 +1,185 @@
+/* =====================================================================================================
+   KDS — redesign das telas de produção (Cozinha, Churrasqueira, Bar)
+   Grade responsiva de cards compactos; prioridade na faixa superior; hierarquia: comanda > mesa > garçom > tempo.
+   Depende de production.css (painel "Total para produção" e tokens base); importado depois dele.
+   ===================================================================================================== */
+.kds-page {
+  --kds-bg: #0f141b;
+  --kds-surface: #191f28;
+  --kds-surface-2: #222a35;
+  --kds-line: #303946;
+  --kds-ink: #f3f6fa;
+  --kds-muted: #aab6c5;
+  --kds-ok: #35d67c;
+  --kds-ok-bg: #123324;
+  --kds-late: #ff4658;
+  --kds-warn: #f5b82e;
+  --kds-info: #43a5f5;
+  --kds-retirada: #36c2b4;
+  color: var(--kds-ink);
+}
+
+/* Topo compacto: título + apoio à esquerda, indicadores à direita */
+.kds-topo {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin-bottom: 14px;
+}
+.kds-titulo { margin: 0; font-size: 28px; font-weight: 750; line-height: 1.1; letter-spacing: -0.01em; color: var(--kds-ink); }
+.kds-sub { margin: 4px 0 0; font-size: 13px; color: var(--kds-muted); }
+.kds-indicadores { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.kds-indicador {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--kds-line); border-radius: 10px;
+  background: var(--kds-surface);
+  font-size: 13px; color: var(--kds-muted);
+}
+.kds-indicador b { font-size: 17px; font-weight: 800; color: var(--kds-ink); font-variant-numeric: tabular-nums; }
+
+/* Grade: cresce conforme o espaço, sem altura fixa e sem rolagem horizontal */
+.kds-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+/* Card */
+.kds-card {
+  position: relative;
+  min-width: 0;
+  background: var(--kds-surface);
+  border: 1px solid var(--kds-line);
+  border-radius: 12px;
+  padding: 16px 16px 14px;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.kds-faixa {
+  position: absolute; inset: 0 0 auto 0;
+  height: 4px;
+  background: var(--kds-info);
+}
+.kds-card.is-atencao .kds-faixa { background: var(--kds-warn); }
+.kds-card.is-atrasado .kds-faixa { background: var(--kds-late); }
+.kds-card.is-pf .kds-faixa { background: var(--kds-warn); }
+.kds-card.is-nova { border-color: var(--kds-ok); box-shadow: 0 0 0 1px rgba(53, 214, 124, 0.35); animation: kds-entrada 0.45s ease-out; }
+@keyframes kds-entrada { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Cabeçalho da comanda */
+.kds-head { display: grid; gap: 6px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--kds-line); }
+.kds-head-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.kds-numero { margin: 0; font-size: 20px; font-weight: 800; line-height: 1.15; color: var(--kds-ink); font-variant-numeric: tabular-nums; }
+.kds-numero-rotulo { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kds-muted); margin-right: 4px; }
+.kds-tempo {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 14px; font-weight: 700; color: var(--kds-muted); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.kds-tempo.is-atencao { color: var(--kds-warn); }
+.kds-tempo.is-atrasado { color: var(--kds-late); }
+.kds-head-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.kds-mesa { font-size: 15px; font-weight: 650; color: var(--kds-ink); }
+.kds-head-autoria:empty { display: none; }
+.kds-garcom {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  font-size: 13px; font-weight: 500; color: var(--kds-muted);
+}
+.kds-garcom svg { flex: 0 0 auto; }
+.kds-garcom-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; color: var(--kds-ink); font-weight: 600; }
+.kds-garcom.is-vazio { color: var(--kds-muted); font-style: italic; }
+.kds-head-rodape { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 2px; }
+.kds-badges { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+
+/* Selos compactos */
+.kds-chip {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--kds-line); background: var(--kds-surface-2);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.02em; color: var(--kds-muted); white-space: nowrap;
+}
+.kds-chip.is-ifood { background: #ea1d2c; border-color: #ea1d2c; color: #fff; font-weight: 800; }
+.kds-chip.is-delivery { color: var(--kds-info); border-color: rgba(67, 165, 245, 0.45); background: rgba(67, 165, 245, 0.1); }
+.kds-chip.is-retirada { color: var(--kds-retirada); border-color: rgba(54, 194, 180, 0.45); background: rgba(54, 194, 180, 0.1); }
+.kds-chip.is-status-normal { color: var(--kds-muted); }
+.kds-chip.is-status-atencao { color: var(--kds-warn); border-color: rgba(245, 184, 46, 0.5); background: rgba(245, 184, 46, 0.1); }
+.kds-chip.is-status-atrasado { color: var(--kds-late); border-color: rgba(255, 70, 88, 0.5); background: rgba(255, 70, 88, 0.1); }
+.kds-chip.is-neutro { color: var(--kds-muted); }
+
+/* Itens */
+.kds-itens { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.kds-item {
+  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 10px 10px 10px 8px;
+  background: var(--kds-surface-2);
+  border: 1px solid var(--kds-line);
+  border-radius: 10px;
+}
+.kds-qtd {
+  display: grid; place-items: center;
+  width: 38px; height: 38px;
+  border-radius: 9px;
+  background: var(--kds-ok-bg); color: var(--kds-ok);
+  font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+.kds-item-corpo { min-width: 0; }
+.kds-item-nome { font-size: 15px; font-weight: 650; line-height: 1.3; color: var(--kds-ink); overflow-wrap: anywhere; }
+.kds-item-ponto { margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--kds-warn); }
+.kds-item-aviso { margin-top: 2px; font-size: 12px; font-weight: 600; color: var(--kds-warn); }
+.kds-item-obs {
+  margin-top: 5px; padding: 4px 8px;
+  border-left: 3px solid var(--kds-warn);
+  background: rgba(245, 184, 46, 0.1);
+  border-radius: 4px;
+  font-size: 13px; line-height: 1.35; color: #ffe2a1; overflow-wrap: anywhere;
+}
+.kds-item-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 4px; font-size: 12px; color: var(--kds-muted); font-variant-numeric: tabular-nums; }
+.kds-item-autor { color: var(--kds-ink); font-weight: 600; }
+.kds-acoes { display: flex; align-items: center; gap: 6px; }
+
+/* Botões: verde = ação principal; neutro = ajuste */
+.kds-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 40px; min-width: 64px; padding: 8px 14px;
+  border: 1px solid transparent; border-radius: 9px;
+  background: var(--kds-ok); color: #06210f;
+  font-size: 14px; font-weight: 750; line-height: 1.1; cursor: pointer; white-space: nowrap;
+  transition: filter 0.15s ease, transform 0.08s ease, background 0.15s ease;
+}
+.kds-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.kds-btn:active:not(:disabled) { transform: translateY(1px) scale(0.98); }
+.kds-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.kds-btn:disabled { opacity: 0.55; cursor: progress; }
+.kds-btn.is-neutro { background: transparent; border-color: var(--kds-line); color: var(--kds-ink); }
+.kds-btn.is-neutro:hover:not(:disabled) { background: var(--kds-surface); }
+.kds-btn.is-compacto { min-width: 44px; padding: 8px 10px; }
+.kds-btn.is-principal { min-height: 38px; }
+
+/* Neutraliza as regras globais de botão/título dentro das telas de produção */
+.prod-page .kds-btn { width: auto; height: auto; font-size: 14px; }
+.prod-page .kds-card h2 { font-size: inherit; }
+.prod-page .kds-numero { font-size: 20px; }
+
+/* Painel "Total para produção" no mesmo vocabulário visual */
+.kds-page .prod-side { background: var(--kds-surface); border-color: var(--kds-line); border-radius: 12px; }
+.kds-page .prod-total-row { background: var(--kds-surface-2); }
+.kds-page .prod-total-row b { color: var(--kds-ok); }
+.kds-page .prod-totals { background: var(--kds-surface); border-color: var(--kds-line); border-radius: 12px; }
+.kds-page .prod-total-card { background: var(--kds-surface-2); border-color: var(--kds-line); }
+.kds-page .prod-total-card .num { color: var(--kds-ok); }
+.kds-page .prod-total-card.is-pf .num { color: var(--kds-warn); }
+
+/* Telas pequenas: uma coluna, alvos de toque confortáveis */
+@media (max-width: 720px) {
+  .kds-titulo { font-size: 24px; }
+  .kds-board { grid-template-columns: 1fr; }
+  .kds-item { grid-template-columns: 38px minmax(0, 1fr); }
+  .kds-acoes { grid-column: 1 / -1; justify-content: flex-end; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kds-card.is-nova { animation: none; }
+  .kds-btn { transition: none; }
+}

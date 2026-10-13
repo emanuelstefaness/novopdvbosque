@@ -1,34 +1,26 @@
 import '../production.css'
+import '../kds.css'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { getPedidosBar, setPedidoSectorStatus } from '../api'
 import { useSocket } from '../socket'
-import PedidoElapsed from '../components/PedidoElapsed'
-import {earliestCreatedAt} from '../utils/pedidoTime'
-import { comandaOnlineLabel, comandaOrigemLabel, isTipoPedidoOnline } from '../utils/comandaOnlineVisual'
+import ComandaCabecalho from '../components/producao/ComandaCabecalho'
+import useAgora from '../hooks/useAgora'
+import useComandasNovas from '../hooks/useComandasNovas'
+import { tipoOnlineFromPedido } from '../utils/comandaOnlineVisual'
 import { observacaoParaProducao } from '../utils/productionObservations'
-
-/** Ordem dos cards = ordem de lançamento na fila (ver Churrasqueira.jsx). */
-function groupByComanda(list) {
-  const map = new Map()
-  const order = []
-  list.forEach((p) => {
-    const key = p.comanda_id
-    if (!map.has(key)) {
-      map.set(key, { comanda_id: key, mesa: p.mesa, items: [] })
-      order.push(key)
-    }
-    map.get(key).items.push(p)
-  })
-  return order.map((k) => map.get(k))
-}
+import { agruparPorComanda, autoriaDaComanda, formatarDecorrido, prioridadeDaComanda } from '../utils/producao'
 
 export default function Bar() {
   const [list, setList] = useState([])
+  const [carregado, setCarregado] = useState(false)
+  const [ocupados, setOcupados] = useState(() => new Set())
   const loadTimeoutRef = useRef(null)
+  const agora = useAgora()
 
   const load = async () => {
     const data = await getPedidosBar()
     setList(data)
+    setCarregado(true)
   }
 
   useEffect(() => { const initial=setTimeout(()=>void load(),0); return () => { clearTimeout(initial); if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current) } }, [])
@@ -37,63 +29,71 @@ export default function Bar() {
     loadTimeoutRef.current = setTimeout(() => { load(); loadTimeoutRef.current = null }, 350)
   })
 
-  const cards = useMemo(() => groupByComanda(list), [list])
+  const cards = useMemo(() => agruparPorComanda(list), [list])
+  const novas = useComandasNovas(cards.map((c) => c.comanda_id), carregado)
+  const totalItens = useMemo(() => list.reduce((s, p) => s + (Number(p.quantity) || 1), 0), [list])
+
+  const marcarOcupado = (ids, ligado) =>
+    setOcupados((prev) => {
+      const n = new Set(prev)
+      ids.forEach((i) => (ligado ? n.add(i) : n.delete(i)))
+      return n
+    })
 
   const setReady = async (pedidoId) => {
+    marcarOcupado([pedidoId], true)
     setList((prev) => prev.filter((p) => p.id !== pedidoId))
     try {
       await setPedidoSectorStatus(pedidoId, 'bar', 'ready')
-      load()
-    } catch {
+    } finally {
+      marcarOcupado([pedidoId], false)
       load()
     }
   }
 
   const setCardAllReady = async (items) => {
-    const ids = new Set(items.map((p) => p.id))
-    setList((prev) => prev.filter((p) => !ids.has(p.id)))
+    const ids = items.map((p) => p.id)
+    marcarOcupado(ids, true)
+    setList((prev) => prev.filter((p) => !ids.includes(p.id)))
     try {
       for (const p of items) {
         await setPedidoSectorStatus(p.id, 'bar', 'ready')
       }
-      load()
-    } catch {
+    } finally {
+      marcarOcupado(ids, false)
       load()
     }
   }
 
   return (
-    <div className="prod-page">
+    <div className="prod-page kds-page">
       <div className="prod-main">
-        <div className="prod-head">
-          <h1 className="prod-title">Bar</h1>
-          <p className="prod-sub">Caipirinhas, doses e drinks — pedidos organizados por comanda.</p>
-          <span className="prod-count">{cards.length} {cards.length === 1 ? 'comanda na fila' : 'comandas na fila'}</span>
+        <div className="kds-topo">
+          <div className="kds-topo-titulo">
+            <h1 className="kds-titulo">Bar</h1>
+            <p className="kds-sub">Caipirinhas, doses e drinks — pedidos organizados por comanda e prioridade de preparo.</p>
+          </div>
+          <div className="kds-indicadores" aria-label="Indicadores da fila">
+            <span className="kds-indicador"><b>{cards.length}</b> {cards.length === 1 ? 'comanda na fila' : 'comandas na fila'}</span>
+            <span className="kds-indicador"><b>{totalItens}</b> {totalItens === 1 ? 'item' : 'itens'} para produzir</span>
+          </div>
         </div>
-        <div className="prod-board">
+        <div className="kds-board">
           {cards.map((card) => {
-            const tipoOn = card.items[0]?.comanda_tipo_online
-            const modo = tipoOn === 'delivery' ? 'is-delivery' : tipoOn === 'retirada' ? 'is-retirada' : ''
-            const numero = card.items[0]?.production_number || card.comanda_id
+            const { nivel } = prioridadeDaComanda(card.items, agora)
+            const tipo = tipoOnlineFromPedido(card.items[0])
+            const modo = tipo ? `is-${tipo}` : ''
+            const { nomes } = autoriaDaComanda(card.items)
+            const ocupado = card.items.some((p) => ocupados.has(p.id))
             return (
-              <section key={card.comanda_id} className={`prod-card ${modo}`}>
-                <div className="prod-card-head">
-                  <div>
-                    <h2 className="prod-card-title">
-                      Comanda {numero}{card.items[0]?.production_number ? ' (paga)' : ''} — Mesa {card.mesa}
-                    </h2>
-                    <div className="prod-card-meta">
-                      {comandaOrigemLabel(card.items[0]) && <span className="prod-chip is-ifood">{comandaOrigemLabel(card.items[0])}</span>}
-                      {isTipoPedidoOnline(tipoOn) && <span className={`prod-chip ${modo}`}>{comandaOnlineLabel(tipoOn)}</span>}
-                      {card.items[0]?.waiter_name && <span>Garçom: {card.items[0].waiter_name}</span>}
-                      <span title="Tempo desde o pedido mais antigo desta comanda na fila">
-                        <PedidoElapsed createdAt={earliestCreatedAt(card.items)} className="text-xs" />
-                      </span>
-                    </div>
-                  </div>
-                  <button type="button" className="prod-btn" onClick={() => setCardAllReady(card.items)}>Tudo pronto</button>
-                </div>
-                <ul className="prod-items">
+              <section
+                key={card.comanda_id}
+                aria-label={`Produção da comanda ${card.items[0]?.production_number || card.comanda_id}`}
+                className={`kds-card is-${nivel} ${modo} ${novas.has(card.comanda_id) ? 'is-nova' : ''}`}
+              >
+                <span className="kds-faixa" aria-hidden="true" />
+                <ComandaCabecalho itens={card.items} agora={agora} ocupado={ocupado} onTudoPronto={() => setCardAllReady(card.items)} />
+                <ul className="kds-itens">
                   {card.items.map((p) => {
                     const obsLinha = observacaoParaProducao(p.observations)
                     const detalhe = [
@@ -102,19 +102,20 @@ export default function Bar() {
                       p.dose_accompaniment,
                       obsLinha,
                     ].filter(Boolean).join(' • ')
+                    const autor = p.launched_by && nomes.length > 1 ? p.launched_by : ''
                     return (
-                      <li key={p.id} className="prod-item">
-                        <span className="prod-qty">{p.quantity}</span>
-                        <div style={{ minWidth: 0 }}>
-                          <div className="prod-item-name">{p.item_name}</div>
-                          {detalhe && <div className="prod-item-note">{detalhe}</div>}
-                          <div className="prod-item-time">
-                            <PedidoElapsed createdAt={p.created_at} className="text-xs" />
-                            {p.launched_by && <span className="prod-by"> · por {p.launched_by}</span>}
+                      <li key={p.id} className="kds-item">
+                        <span className="kds-qtd" aria-label={`Quantidade ${p.quantity}`}>{p.quantity}</span>
+                        <div className="kds-item-corpo">
+                          <div className="kds-item-nome">{p.item_name}</div>
+                          {detalhe && <div className="kds-item-obs">{detalhe}</div>}
+                          <div className="kds-item-meta">
+                            <span title="Tempo deste item na fila">{formatarDecorrido(p.created_at, agora)}</span>
+                            {autor && <span className="kds-item-autor">por {autor}</span>}
                           </div>
                         </div>
-                        <div className="prod-actions">
-                          <button type="button" className="prod-btn is-small" onClick={() => setReady(p.id)}>Pronto</button>
+                        <div className="kds-acoes">
+                          <button type="button" className="kds-btn" disabled={ocupados.has(p.id)} onClick={() => setReady(p.id)}>Pronto</button>
                         </div>
                       </li>
                     )

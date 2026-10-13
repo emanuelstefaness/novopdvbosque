@@ -1,27 +1,16 @@
 import '../production.css'
+import '../kds.css'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { getPedidosGrill, getProductionGrill, markPedidoChurrasqueiraReady } from '../api'
 import { useSocket } from '../socket'
-import PedidoElapsed from '../components/PedidoElapsed'
-import {earliestCreatedAt} from '../utils/pedidoTime'
-import { comandaOnlineLabel, comandaOrigemLabel, isTipoPedidoOnline } from '../utils/comandaOnlineVisual'
+import ComandaCabecalho from '../components/producao/ComandaCabecalho'
+import useAgora from '../hooks/useAgora'
+import useComandasNovas from '../hooks/useComandasNovas'
+import { earliestCreatedAt } from '../utils/pedidoTime'
+import { tipoOnlineFromPedido } from '../utils/comandaOnlineVisual'
+import { agruparPorComanda, autoriaDaComanda, autorDoItem, formatarDecorrido, prioridadeDaComanda } from '../utils/producao'
 import { observacaoParaProducao } from '../utils/productionObservations'
 import { textoResumoAddonsPedido } from '../utils/lancheAddons'
-
-/** Agrupa por comanda mantendo ordem de lançamento (primeiro pedido na fila define a ordem dos cards). Não usar Object + comanda_id numérico: o JS reordena chaves inteiras. */
-function groupByComanda(list) {
-  const map = new Map()
-  const order = []
-  list.forEach((p) => {
-    const key = p.comanda_id
-    if (!map.has(key)) {
-      map.set(key, { comanda_id: key, mesa: p.mesa, items: [] })
-      order.push(key)
-    }
-    map.get(key).items.push(p)
-  })
-  return order.map((k) => map.get(k))
-}
 
 function groupItemsByProduct(items) {
   const map = {}
@@ -40,11 +29,6 @@ function groupItemsByProduct(items) {
     map[label].pedidos.push(p)
   })
   return Object.values(map)
-}
-
-/** Nomes (sem repetir) de quem lançou os pedidos do grupo. */
-function lancadoPor(pedidos) {
-  return [...new Set((pedidos || []).map((p) => p.launched_by).filter(Boolean))].join(', ')
 }
 
 function formatByPoint(byPoint) {
@@ -86,6 +70,7 @@ export default function Churrasqueira() {
   const [list, setList] = useState([])
   const [busy,setBusy]=useState(false)
   const [error,setError]=useState('')
+  const [carregado, setCarregado] = useState(false)
   const busyRef=useRef(false)
   const [production, setProduction] = useState({ byItem: [], pratoFeito: null })
   const [totalMinimized, setTotalMinimized] = useState(()=>window.matchMedia("(max-width: 600px)").matches)
@@ -93,6 +78,7 @@ export default function Churrasqueira() {
   const load = async () => {
     const [pedidos, prod] = await Promise.all([getPedidosGrill(), getProductionGrill()])
     setList(pedidos)
+    setCarregado(true)
     setProduction({
       byItem: prod.byItem || [],
       pratoFeito: normalizePratoFeitoSummary(prod.pratoFeito)
@@ -106,7 +92,7 @@ export default function Churrasqueira() {
     loadTimeoutRef.current = setTimeout(() => { load(); loadTimeoutRef.current = null }, 400)
   })
 
-  const cards = useMemo(() => groupByComanda(list), [list])
+  const cards = useMemo(() => agruparPorComanda(list), [list])
 
   const subtractFromProduction = (itemsToRemove) => {
     const byKey = {}
@@ -172,87 +158,82 @@ export default function Churrasqueira() {
   }
 
   const productionGrouped = useMemo(() => groupProductionByItem(production.byItem), [production.byItem])
+  const novas = useComandasNovas(cards.map((c) => c.comanda_id), carregado)
+  const agora = useAgora()
+  const totalItens = useMemo(() => list.reduce((s, p) => s + (Number(p.quantity) || 1), 0), [list])
 
   return (
-    <div className="prod-page">
+    <div className="prod-page kds-page">
       <div className="prod-main">
-        <div className="prod-head">
-          <h1 className="prod-title">Churrasqueira</h1>
-          <p className="prod-sub">Pedidos organizados por comanda e prioridade de preparo.</p>
-          <span className="prod-count" title="Total de cards de comanda na fila">
-            {cards.length} {cards.length === 1 ? 'comanda na fila' : 'comandas na fila'}
-          </span>
-          {totalMinimized && (
-            <button type="button" onClick={() => setTotalMinimized(false)} className="prod-btn is-ghost prod-toggle" title="Abrir total para produção">
-              Total produção
-            </button>
-          )}
+        <div className="kds-topo">
+          <div className="kds-topo-titulo">
+            <h1 className="kds-titulo">Churrasqueira</h1>
+            <p className="kds-sub">Pedidos organizados por comanda e prioridade de preparo.</p>
+          </div>
+          <div className="kds-indicadores" aria-label="Indicadores da fila">
+            <span className="kds-indicador" title="Total de comandas na fila"><b>{cards.length}</b> {cards.length === 1 ? 'comanda na fila' : 'comandas na fila'}</span>
+            <span className="kds-indicador" title="Unidades pendentes na churrasqueira"><b>{totalItens}</b> {totalItens === 1 ? 'item' : 'itens'} para produzir</span>
+            {totalMinimized && (
+              <button type="button" onClick={() => setTotalMinimized(false)} className="kds-btn is-neutro" title="Abrir total para produção">
+                Total produção
+              </button>
+            )}
+          </div>
         </div>
         {error && <p className="error-banner" role="alert">{error}</p>}
-        <div className="prod-board">
+        <div className="kds-board">
           {cards.map((card) => {
-            const tipoOn = card.items[0]?.comanda_tipo_online
-            const modo = tipoOn === 'delivery' ? 'is-delivery' : tipoOn === 'retirada' ? 'is-retirada' : ''
-            const numero = card.items[0]?.production_number || card.comanda_id
+            const { nivel } = prioridadeDaComanda(card.items, agora)
+            const tipo = tipoOnlineFromPedido(card.items[0])
+            const modo = tipo ? `is-${tipo}` : ''
+            const { nomes } = autoriaDaComanda(card.items)
             return (
               <section
                 key={card.comanda_id}
-                aria-label={`Produção da comanda ${card.comanda_id}`}
-                className={`prod-card ${modo}`}
+                aria-label={`Produção da comanda ${card.items[0]?.production_number || card.comanda_id}`}
+                className={`kds-card is-${nivel} ${modo} ${novas.has(card.comanda_id) ? 'is-nova' : ''}`}
               >
-                <div className="prod-card-head">
-                  <div>
-                    <h2 className="prod-card-title">
-                      Comanda {numero}{card.items[0]?.production_number ? ' (paga)' : ''} — Mesa {card.mesa}
-                    </h2>
-                    <div className="prod-card-meta">
-                      {comandaOrigemLabel(card.items[0]) && <span className="prod-chip is-ifood">{comandaOrigemLabel(card.items[0])}</span>}
-                      {isTipoPedidoOnline(tipoOn) && <span className={`prod-chip ${modo}`}>{comandaOnlineLabel(tipoOn)}</span>}
-                      {card.items[0]?.waiter_name && <span>Garçom: {card.items[0].waiter_name}</span>}
-                      <span title="Tempo desde o pedido mais antigo desta comanda na fila">
-                        <PedidoElapsed createdAt={earliestCreatedAt(card.items)} className="text-xs" />
-                      </span>
-                    </div>
-                  </div>
-                  <button type="button" className="prod-btn" disabled={busy} onClick={() => setCardAllReady(card.items)}>
-                    Tudo pronto
-                  </button>
-                </div>
-                <ul className="prod-items">
-                  {groupItemsByProduct(card.items).map((g) => (
-                    <li key={g.label} className="prod-item">
-                      <span className="prod-qty">{g.total}</span>
-                      <div style={{ minWidth: 0 }}>
-                        <div className="prod-item-name">
-                          {g.displayBase}
-                          {g.pedidos.some((x) => Number(x.is_side)) && <span className="prod-chip" style={{ marginLeft: 6 }}>Cozinha</span>}
+                <span className="kds-faixa" aria-hidden="true" />
+                <ComandaCabecalho itens={card.items} agora={agora} ocupado={busy} onTudoPronto={() => setCardAllReady(card.items)} />
+                <ul className="kds-itens">
+                  {groupItemsByProduct(card.items).map((g) => {
+                    const pontos = formatByPoint(g.byPoint).trim().replace(/^\(|\)$/g, '')
+                    const autores = autorDoItem(g.pedidos)
+                    return (
+                      <li key={g.label} className="kds-item">
+                        <span className="kds-qtd" aria-label={`Quantidade ${g.total}`}>{g.total}</span>
+                        <div className="kds-item-corpo">
+                          <div className="kds-item-nome">
+                            {g.displayBase}
+                            {g.pedidos.some((x) => Number(x.is_side)) && <span className="kds-chip is-neutro" style={{ marginLeft: 6 }}>Cozinha</span>}
+                          </div>
+                          {pontos && <div className="kds-item-ponto">{pontos}</div>}
+                          {g.observation && <div className="kds-item-obs">{g.observation}</div>}
+                          <div className="kds-item-meta">
+                            <span title="Tempo deste item na fila">{formatarDecorrido(earliestCreatedAt(g.pedidos), agora)}</span>
+                            {autores.length > 0 && nomes.length > 1 && <span className="kds-item-autor">por {autores.join(', ')}</span>}
+                          </div>
                         </div>
-                        {formatByPoint(g.byPoint) && <div className="prod-item-sub">{formatByPoint(g.byPoint).trim().replace(/^\(|\)$/g, '')}</div>}
-                        {g.observation && <div className="prod-item-note">{g.observation}</div>}
-                        <div className="prod-item-time">
-                          <PedidoElapsed createdAt={earliestCreatedAt(g.pedidos)} className="text-xs" />
-                          {lancadoPor(g.pedidos) && <span className="prod-by"> · por {lancadoPor(g.pedidos)}</span>}
-                        </div>
-                      </div>
-                      <div className="prod-actions">
-                        {g.total > 1 && (
-                          <button
-                            type="button"
-                            className="prod-btn is-ghost"
-                            onClick={() => markOneReady(g.pedidos)}
-                            title="Dar pronto em 1 unidade"
-                            aria-label={`Dar pronto em 1 unidade de ${g.displayBase}`}
-                            disabled={busy}
-                          >
-                            −1
+                        <div className="kds-acoes">
+                          {g.total > 1 && (
+                            <button
+                              type="button"
+                              className="kds-btn is-neutro is-compacto"
+                              onClick={() => markOneReady(g.pedidos)}
+                              title="Dar pronto em 1 unidade"
+                              aria-label={`Dar pronto em 1 unidade de ${g.displayBase}`}
+                              disabled={busy}
+                            >
+                              −1
+                            </button>
+                          )}
+                          <button type="button" className="kds-btn" disabled={busy} onClick={() => setCardAllReady(g.pedidos)}>
+                            {g.total > 1 ? 'Todos' : 'Pronto'}
                           </button>
-                        )}
-                        <button type="button" className="prod-btn is-small" disabled={busy} onClick={() => setCardAllReady(g.pedidos)}>
-                          {g.total > 1 ? 'Todos' : 'Pronto'}
-                        </button>
-                      </div>
-                    </li>
-                  ))}
+                        </div>
+                      </li>
+                    )
+                  })}
                 </ul>
               </section>
             )
