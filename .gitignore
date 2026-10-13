@@ -11,3 +11,6 @@ backend/pdv_bosque.db-shm
 *.log
 ULTIMO_LINK_TUNEL.txt
 .worktrees/
+
+# backups locais do banco
+backend/*.backup-*.db
