@@ -47,33 +47,28 @@
   align-items: flex-start;
   gap: 14px;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
   padding: 14px;
   background: #0b1017;
   border: 1px solid var(--kds-line);
   border-radius: 14px;
-  max-height: calc(100vh - 190px);
   scroll-snap-type: x proximity;
   scrollbar-color: #4a5566 #0b1017;
   scrollbar-width: thin;
 }
 .kds-board > .kds-card {
-  flex: 0 0 340px;
-  width: 340px;
-  max-height: 100%;
+  /* ocupa a largura disponível (sem cortar o último card); só rola para o lado quando não couber no mínimo */
+  flex: 1 0 300px;
+  min-width: 300px;
+  max-width: 400px;
   display: flex;
   flex-direction: column;
   scroll-snap-align: start;
 }
-/* Cada card cresce conforme os itens; passando da altura da tela, rola por dentro */
+/* Cada card cresce conforme os itens; pedidos grandes rolam a tela na vertical */
 .kds-board > .kds-card .kds-head { flex: 0 0 auto; }
 .kds-board > .kds-card .kds-itens {
   flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 2px;
-  scrollbar-color: #4a5566 transparent;
-  scrollbar-width: thin;
 }
 
 /* Card */
@@ -200,7 +195,7 @@
 /* Telas pequenas: uma coluna, alvos de toque confortáveis */
 @media (max-width: 720px) {
   .kds-titulo { font-size: 24px; }
-  .kds-board > .kds-card { flex-basis: 300px; width: 300px; }
+  .kds-board > .kds-card { flex-basis: 280px; min-width: 280px; }
   .kds-item { grid-template-columns: 38px minmax(0, 1fr); }
   .kds-acoes { grid-column: 1 / -1; justify-content: flex-end; }
 }

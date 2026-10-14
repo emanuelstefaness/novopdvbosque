@@ -13,6 +13,7 @@ const Caixa = lazy(() => import("./pages/Caixa"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Financeiro = lazy(() => import("./pages/Financeiro"));
 const Cardapio = lazy(() => import("./pages/Cardapio"));
+const ItensIfood = lazy(() => import("./pages/ItensIfood"));
 const TvChurrasqueira = lazy(() => import("./pages/TvChurrasqueira"));
 const TvCozinha = lazy(() => import("./pages/TvCozinha"));
 const TvBar = lazy(() => import("./pages/TvBar"));
@@ -110,6 +111,14 @@ function App() {
           element={
             <SemAcessoGarcom>
               <Cardapio />
+            </SemAcessoGarcom>
+          }
+        />
+        <Route
+          path="/itens-ifood"
+          element={
+            <SemAcessoGarcom>
+              <ItensIfood />
             </SemAcessoGarcom>
           }
         />

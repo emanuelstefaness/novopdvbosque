@@ -28,17 +28,20 @@ export function normalizarNome(s) {
     .trim();
 }
 
+/** Chave pelo nome: o externalCode do catálogo do iFood é o mesmo em todos os itens, então não identifica nada. */
 function chaveDoItem(it) {
-  const code = String(it.externalCode || '').trim();
-  return code ? `code:${code}` : `name:${normalizarNome(it.name)}`;
+  return `name:${normalizarNome(it.name)}`;
 }
 
 /** Item do PDV correspondente a um item do iFood; cria um item interno só para não perder o pedido. */
 function resolverItem(db, it, unitPrice) {
   const key = chaveDoItem(it);
-  const nomeKey = `name:${normalizarNome(it.name)}`;
-  const mapa = db.prepare('SELECT item_id FROM ifood_item_map WHERE external_key = ? AND item_id IS NOT NULL');
-  let row = mapa.get(key) || mapa.get(nomeKey);
+  const mapa = db.prepare('SELECT item_id, auto_created FROM ifood_item_map WHERE external_key = ? AND item_id IS NOT NULL');
+  const codigo = String(it.externalCode || '').trim();
+  // O nome é a chave; o código só vale se alguém mapeou aquele código de propósito (no catálogo real ele se repete).
+  // Mapeamento manual sempre vence o item criado automaticamente.
+  const candidatos = [mapa.get(key), codigo ? mapa.get(`code:${codigo}`) : null].filter(Boolean);
+  const row = candidatos.find((c) => !c.auto_created) || candidatos[0];
   if (row && db.prepare('SELECT 1 FROM items WHERE id = ?').get(row.item_id)) return { itemId: row.item_id, mapeado: true };
 
   const porNome = db
@@ -107,6 +110,21 @@ function textoDocumento(order) {
   return doc ? `CPF/CNPJ na nota: ${doc}` : '';
 }
 
+/** Espetinho escolhido no complemento do Prato Feito (de-para pelo nome da opção); null se não houver. */
+function espetinhoDoPratoFeito(db, it, itemId) {
+  const pf = db.prepare('SELECT is_prato_feito FROM items WHERE id = ?').get(itemId);
+  if (!pf || !pf.is_prato_feito) return null;
+  const mapa = db.prepare(
+    'SELECT m.item_id FROM ifood_item_map m JOIN items i ON i.id = m.item_id WHERE m.external_key = ? AND i.is_grill = 1 AND COALESCE(i.is_prato_feito, 0) = 0',
+  );
+  for (const o of Array.isArray(it.options) ? it.options : []) {
+    const nome = normalizarNome(o.name);
+    const r = mapa.get(`name:${nome}`) || mapa.get(`name:espetinho de ${nome}`);
+    if (r) return r.item_id;
+  }
+  return null;
+}
+
 function observacoesDoItem(it) {
   const partes = [];
   const opcoes = Array.isArray(it.options) ? it.options : [];
@@ -164,7 +182,10 @@ export function importarPedidoIfood(db, order, { avisar = true } = {}) {
     const itensPdv = linhas.map(({ it, qtd, unit }) => {
       const r = resolverItem(db, it, unit);
       if (!r.mapeado) naoMapeados.push(it.name);
-      return { item_id: r.itemId, quantity: qtd, unit_price: unit, observations: observacoesDoItem(it) };
+      return {
+        item_id: r.itemId, quantity: qtd, unit_price: unit, observations: observacoesDoItem(it),
+        prato_feito_espetinho_id: espetinhoDoPratoFeito(db, it, r.itemId),
+      };
     });
 
     const info = db.prepare(`
@@ -208,7 +229,7 @@ export function importarPedidoIfood(db, order, { avisar = true } = {}) {
       'INSERT INTO order_items (order_id, item_id, quantity, unit_price, observations) VALUES (?, ?, ?, ?, ?)',
     );
     for (const p of itensPdv) insItem.run(orderId, p.item_id, p.quantity, p.unit_price, p.observations);
-    dispatchItemsToSectors(db, comandaId, itensPdv.map((p) => ({ ...p, prato_feito_espetinho_id: null })));
+    dispatchItemsToSectors(db, comandaId, itensPdv);
     return { orderId, comandaId };
   });
   const { orderId, comandaId } = run();

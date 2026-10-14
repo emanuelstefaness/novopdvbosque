@@ -81,6 +81,8 @@ const PEDIR_MARKETING_DESC = {
     'Mix de alfaces frescas com cenoura e pepino, finalizada com bacon crocante, parmesão, torradas e molhos especiais — leve, crocante e cheia de sabor.',
   arvoredo:
     'O premium da casa: ancho na brasa, suculento e no ponto certo, acompanhado de arroz, maionese cremosa e nossa Salada do Bosque — completo, intenso e simplesmente irresistível.',
+  'alcatra na pedra':
+    'Espeto de alcatra inteiro, suculento e no ponto certo, servido na pedra quente — acompanha arroz soltinho, maionese cremosa e nossa Salada do Bosque.',
   'x bosque':
     'Hambúrguer de kafta suculento, cheddar derretido, alface americana crocante e cebola caramelizada — combinação intensa, agridoce e simplesmente viciante.',
   'x-bosque':

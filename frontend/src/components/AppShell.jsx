@@ -25,6 +25,7 @@ const groups = [
     "Gestão",
     [
       ["/cardapio", "Cardápio", "book"],
+      ["/itens-ifood", "Itens do iFood", "orders"],
       ["/admin", "Relatórios", "chart"],
       ["/financeiro", "Financeiro", "wallet"],
     ],

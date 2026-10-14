@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { importarPedidoIfood, pedidoIfoodDeExemplo, ifoodConfigurado, estadoIfood, criarClienteIfood, modoIfood } from '../ifood.js';
+import { importarPedidoIfood, pedidoIfoodDeExemplo, ifoodConfigurado, estadoIfood, criarClienteIfood, modoIfood, normalizarNome } from '../ifood.js';
+import { getPedidoSector } from '../itemSector.js';
 
 export const ifoodRouter = Router();
 const getDb = (req) => req.app.get('db');
@@ -50,25 +51,54 @@ ifoodRouter.post('/simular', (req, res) => {
 ifoodRouter.get('/mapa', (req, res) => {
   const rows = getDb(req)
     .prepare(`
-      SELECT m.external_key, m.external_name, m.item_id, m.auto_created, i.name AS item_name
-      FROM ifood_item_map m LEFT JOIN items i ON i.id = m.item_id
+      SELECT m.external_key, m.external_name, m.item_id, m.auto_created, m.updated_at, i.name AS item_name,
+             i.is_grill, i.is_kitchen, i.is_bar, i.is_side, c.slug AS category_slug
+      FROM ifood_item_map m
+      LEFT JOIN items i ON i.id = m.item_id
+      LEFT JOIN categories c ON c.id = i.category_id
       ORDER BY m.auto_created DESC, m.external_name
     `)
-    .all();
+    .all()
+    .map(({ is_grill, is_kitchen, is_bar, is_side, category_slug, ...m }) => ({
+      ...m,
+      // Item interno "[iFood] ..." (ainda não ligado) cai na Cozinha.
+      setor: getPedidoSector({ is_grill, is_kitchen, is_bar, is_side, category_slug }),
+    }));
+  res.json(rows);
+});
+
+// Itens do PDV que podem ser escolhidos no de-para (cardápio de verdade, com o setor de produção de cada um).
+ifoodRouter.get('/itens-pdv', (req, res) => {
+  const rows = getDb(req)
+    .prepare(`
+      SELECT i.id, i.name, i.price, c.name AS category_name, c.slug AS category_slug,
+             i.is_grill, i.is_kitchen, i.is_bar, i.is_side
+      FROM items i JOIN categories c ON c.id = i.category_id
+      WHERE COALESCE(i.internal_only, 0) = 0 AND i.name NOT LIKE '[iFood]%'
+        AND (i.is_grill = 1 OR i.is_kitchen = 1 OR i.is_bar = 1 OR i.is_side = 1)
+      ORDER BY c.sort_order, c.name, i.name
+    `)
+    .all()
+    .map(({ is_grill, is_kitchen, is_bar, is_side, category_slug, ...i }) => ({
+      ...i,
+      setor: getPedidoSector({ is_grill, is_kitchen, is_bar, is_side, category_slug }),
+    }));
   res.json(rows);
 });
 
 ifoodRouter.put('/mapa', (req, res) => {
   const db = getDb(req);
-  const key = String(req.body?.external_key || '').trim();
+  const nome = String(req.body?.external_name || '').trim();
+  const key = String(req.body?.external_key || '').trim() || (nome ? `name:${normalizarNome(nome)}` : '');
   const itemId = Number(req.body?.item_id);
   const item = db.prepare('SELECT id FROM items WHERE id = ?').get(itemId);
-  if (!key || !item) return res.status(400).json({ error: 'Informe external_key e um item_id válido.' });
+  if (!key || !item) return res.status(400).json({ error: 'Informe o item do iFood e um item do PDV válido.' });
   db.prepare(`
-    INSERT INTO ifood_item_map (external_key, item_id, auto_created) VALUES (?, ?, 0)
-    ON CONFLICT(external_key) DO UPDATE SET item_id = excluded.item_id, auto_created = 0, updated_at = datetime('now','localtime')
-  `).run(key, itemId);
-  res.json({ ok: true });
+    INSERT INTO ifood_item_map (external_key, external_name, item_id, auto_created) VALUES (?, ?, ?, 0)
+    ON CONFLICT(external_key) DO UPDATE SET item_id = excluded.item_id, auto_created = 0,
+      external_name = COALESCE(ifood_item_map.external_name, excluded.external_name), updated_at = datetime('now','localtime')
+  `).run(key, nome || null, itemId);
+  res.json({ ok: true, external_key: key });
 });
 
 // Motivos de cancelamento aceitos pelo iFood para um pedido (a tela de cancelar deve exibi-los).

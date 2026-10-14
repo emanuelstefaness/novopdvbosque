@@ -490,3 +490,24 @@ export async function paySelection(id,ids) {
   const r=await apiFetch(`${API}/api/comandas/${id}/pay-selection`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
   const data=await r.json();if(!r.ok)throw new Error(data.error || 'Falha ao registrar pagamento');return data;
 }
+
+export async function getIfoodMapa() {
+  const r = await apiFetch(`${API}/api/ifood/mapa`);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Falha ao carregar os itens do iFood');
+  return d;
+}
+
+export async function getIfoodItensPdv() {
+  const r = await apiFetch(`${API}/api/ifood/itens-pdv`);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Falha ao carregar os itens do PDV');
+  return d;
+}
+
+export async function salvarIfoodMapa(payload) {
+  const r = await apiFetch(`${API}/api/ifood/mapa`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Não foi possível salvar a ligação');
+  return d;
+}

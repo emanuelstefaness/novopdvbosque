@@ -459,6 +459,58 @@ export function initDb() {
     console.warn('Migração Churraspão de coração:', e.message);
   }
 
+  // Itens do iFood (de-para inicial): nome no catálogo do iFood → item do PDV (define o setor e entra na contagem)
+  try {
+    const norm = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const DEPARA = {
+      'Espetinho de Gado com Bacon': 'Gado com Bacon',
+      'Espetinho de Gado com Legumes': 'Gado com Bacon e Legumes',
+      'Espetinho de Coração de Frango': 'Coração de Frango',
+      'Espetinho de Kafta': 'Kafta',
+      'Espetinho de Medalhão Suíno': 'Medalhão Suíno',
+      'Espetinho de Medalhão de Frango': 'Medalhão de Frango',
+      'Espetinho de Medalhão de Mandioca': 'Medalhão de Mandioca',
+      'Espetinho de Queijo Coalho': 'Queijo Coalho',
+      'Espetinho de Pão de Alho': 'Pão de Alho',
+      'X-Bosque': 'X-Bosque',
+      'Churraspão': 'Churraspão',
+      'Prato Feito': 'Prato Feito do Bosque',
+      'Salada do Bosque': 'Salada do Bosque',
+      'Arroz': 'Arroz',
+      'Maionese Caseira': 'Maionese Caseira',
+      'Agua Com Gás': 'Água com ou sem gás',
+      'Agua Sem Gas': 'Água com ou sem gás',
+      'Coca-Cola Original 350ml': 'Coca-Cola 350ml',
+      'Refrigerante Coca Cola S/Acucar Lt 350ml': 'Coca-Cola 350ml',
+      'Fanta Guaraná 350ml': 'Guaraná 350ml',
+      'Refrigerante Fanta Laranja 350ml': 'Fanta 350ml',
+      'Suco Prats Laranja Integral 300ml': 'Suco Prats',
+    };
+    const pdv = db.prepare("SELECT id, name FROM items WHERE COALESCE(internal_only, 0) = 0").all();
+    const insMap = db.prepare("INSERT OR IGNORE INTO ifood_item_map (external_key, external_name, item_id, auto_created) VALUES (?, ?, ?, 0)");
+    for (const [ifoodNome, pdvNome] of Object.entries(DEPARA)) {
+      const alvo = pdv.find((x) => norm(x.name) === norm(pdvNome));
+      if (alvo) insMap.run('name:' + norm(ifoodNome), ifoodNome, alvo.id);
+    }
+  } catch (e) {
+    console.warn('Migração de-para iFood:', e.message);
+  }
+
+  // Delivery: Arvoredo sai do Pedir online (continua no PDV interno) e entra a Alcatra na Pedra (uma única vez)
+  try {
+    const pratosCat = db.prepare('SELECT id FROM categories WHERE slug = ?').get('pratos');
+    const has = db.prepare('SELECT 1 FROM items WHERE name = ?').get('Alcatra na Pedra');
+    if (pratosCat && !has) {
+      db.prepare(`
+        INSERT INTO items (category_id, name, price, description, requires_meat_point, is_grill, is_kitchen, is_bar, is_side, is_prato_feito, is_arvoredo)
+        VALUES (?, 'Alcatra na Pedra', 189.90, ?, 1, 1, 1, 0, 0, 0, 0)
+      `).run(pratosCat.id, 'Espeto de alcatra inteiro na brasa, servido na pedra. Acompanha arroz, maionese e Salada do Bosque.');
+      db.prepare("UPDATE items SET internal_only = 1 WHERE name = 'Arvoredo'").run();
+    }
+  } catch (e) {
+    console.warn('Migração Alcatra na Pedra:', e.message);
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS finance_expenses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
