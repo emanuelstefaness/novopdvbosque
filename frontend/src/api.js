@@ -528,8 +528,9 @@ export async function retomarComanda(id) {
   return d;
 }
 
-export async function getHistoricoComandas({ de, ate, q } = {}) {
+export async function getHistoricoComandas({ de, ate, q, origem } = {}) {
   const p = new URLSearchParams();
+  if (origem && origem !== 'todas') p.set('origem', origem);
   if (de) p.set('from', de);
   if (ate) p.set('to', ate);
   if (q) p.set('q', q);

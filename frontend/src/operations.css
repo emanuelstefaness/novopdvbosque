@@ -1279,3 +1279,9 @@
 .cash-held-section > header p { margin: 0; font-size: 13px; color: var(--muted, #98a2b3); }
 .cash-comanda.held { border-color: rgba(67, 165, 245, 0.55); }
 .cash-comanda.held .cash-comanda-status { color: #43a5f5; }
+.history-filters select { min-height: 40px; padding: 0 10px; border: 1px solid var(--line, #2b3036); border-radius: 8px; background: var(--surface, #1a1d21); color: var(--ink, #eef1f6); font-size: 14px; }
+.history-number.is-online { background: #2a1f33; color: #d9b8ff; font-size: 13px; }
+.history-amount.is-muted { color: var(--muted, #98a2b3); text-decoration: line-through; }
+.history-status.is-entregue { color: #35d67c; border-color: rgba(53, 214, 124, 0.45); }
+.history-status.is-cancelado { color: #ff6b7a; border-color: rgba(255, 107, 122, 0.5); }
+.history-item-obs { color: #ffe2a1; }

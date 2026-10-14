@@ -9,11 +9,15 @@ const getDb = (req) => req.app.get('db');
 // Listar pedidos online (interno)
 ordersRouter.get('/', (req, res) => {
   const db = getDb(req);
-  const { tipo, status } = req.query;
+  const { tipo, status, dia } = req.query;
+  // Por padrao so os pedidos de hoje (a partir das 00:00). Os anteriores ficam no Historico de comandas.
+  // `?dia=todos` devolve tudo (uso interno/relatorios).
+  const soHoje = dia !== 'todos';
   let list = db.prepare(`
     SELECT o.*, c.id as comanda_id, c.mesa, c.status as comanda_status
     FROM orders o
     LEFT JOIN comandas c ON c.id = o.comanda_id
+    ${soHoje ? "WHERE substr(o.created_at, 1, 10) = date('now','localtime')" : ''}
     ORDER BY o.created_at DESC
   `).all();
   if (tipo && ['delivery', 'retirada'].includes(tipo)) {

@@ -89,6 +89,17 @@ export default function PedidosOnlineInterno() {
     void load();
     return () => clearTimeout(timer.current);
   }, []);
+  // Virada do dia (00:00): os pedidos de ontem saem desta tela e ficam no Histórico de comandas.
+  useEffect(() => {
+    let t;
+    const agendar = () => {
+      const agora = new Date();
+      const meiaNoite = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() + 1, 0, 0, 2);
+      t = setTimeout(() => { void load(); agendar(); }, meiaNoite - agora);
+    };
+    agendar();
+    return () => clearTimeout(t);
+  }, []);
   useSocket((payload, event) => {
     void load();
     if (event === "novo-pedido-online") {
@@ -232,7 +243,7 @@ export default function PedidosOnlineInterno() {
             className={view === "history" ? "selected" : ""}
             onClick={() => setView("history")}
           >
-            Histórico<span className="count">{history.length}</span>
+            Finalizados hoje<span className="count">{history.length}</span>
           </button>
         </div>
         <label className="search-field">
@@ -289,7 +300,7 @@ export default function PedidosOnlineInterno() {
       ) : (
         <div className="data-panel">
           <div className="section-heading">
-            <h2>Histórico de pedidos</h2>
+            <h2>Finalizados hoje</h2>
             <span>{history.length} registros</span>
           </div>
           <div className="table-scroll">

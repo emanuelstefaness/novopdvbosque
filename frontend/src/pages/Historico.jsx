@@ -4,6 +4,8 @@ import { getHistoricoComandas, getHistoricoComanda } from '../api'
 const dinheiro = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const MEIOS = { dinheiro: 'Dinheiro', pix: 'Pix', debito: 'Débito', credito: 'Crédito' }
 const SITUACAO = { fechada: 'Paga', guardada: 'Guardada', aberta: 'Em aberto' }
+const ORIGENS = [['todas', 'Todas'], ['salao', 'Salão'], ['online', 'Pedir online'], ['ifood', 'iFood']]
+const textoSituacao = (c) => c.situacao_texto || SITUACAO[c.situacao] || c.situacao
 
 const pad = (n) => String(n).padStart(2, '0')
 const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -38,7 +40,40 @@ function Detalhe({ chave, onFechar }) {
         <button type="button" className="account-modal-close icon-button" aria-label="Fechar" onClick={onFechar}>×</button>
         {erro && <p className="error-banner" role="alert">{erro}</p>}
         {!d && !erro && <p>Carregando…</p>}
-        {d && (
+        {d && d.tipo_registro === 'online' && (
+          <>
+            <h2 id="hist-title">{d.canal} {d.numero} · {d.cliente_nome}</h2>
+            <p className="history-meta">
+              {d.situacao === 'entregue' ? 'Entregue' : d.situacao === 'cancelado' ? 'Cancelado' : d.situacao} · feito em {quando(d.criado_em)}
+              {d.concluido_em && d.situacao === 'entregue' ? ` · concluído ${quando(d.concluido_em)}` : ''}
+            </p>
+            {d.cliente_telefone && <p className="history-meta">Telefone: {d.cliente_telefone}</p>}
+            {d.endereco && <p className="history-meta">Entrega: {d.endereco}</p>}
+            {d.motivo_cancelamento && <p className="history-obs">Motivo do cancelamento: {d.motivo_cancelamento}</p>}
+            {d.observacao && <p className="history-obs">Obs.: {d.observacao}</p>}
+            <h3>Itens</h3>
+            <table className="history-table">
+              <thead><tr><th>Item</th><th className="num">Qtd.</th><th className="num">Unitário</th><th className="num">Total</th></tr></thead>
+              <tbody>
+                {d.itens.map((i, k) => (
+                  <tr key={k}>
+                    <td>{i.nome}{i.observacao ? <small className="history-item-obs"> · {i.observacao}</small> : null}</td>
+                    <td className="num">{i.quantidade}</td>
+                    <td className="num">{dinheiro(i.unitario)}</td>
+                    <td className="num">{dinheiro(i.unitario * i.quantidade)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="history-totals">
+              <span>Itens <b>{dinheiro(d.subtotal)}</b></span>
+              {d.entrega_e_ajustes !== 0 && <span>Entrega e ajustes <b>{dinheiro(d.entrega_e_ajustes)}</b></span>}
+              <span className="history-total">Total <b>{dinheiro(d.total)}</b></span>
+            </div>
+            <p className="history-meta">Pagamento: {d.forma_pagamento || '—'}{d.pagamento_status ? ` (${d.pagamento_status})` : ''}</p>
+          </>
+        )}
+        {d && d.tipo_registro !== 'online' && (
           <>
             <h2 id="hist-title">
               Comanda {String(d.comanda_id).padStart(2, '0')}
@@ -97,6 +132,7 @@ export default function Historico() {
   const [de, setDe] = useState(diasAtras(6))
   const [ate, setAte] = useState(iso(new Date()))
   const [q, setQ] = useState('')
+  const [origem, setOrigem] = useState('todas')
   const [dados, setDados] = useState(null)
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(true)
@@ -106,13 +142,13 @@ export default function Historico() {
     setCarregando(true)
     setErro('')
     try {
-      setDados(await getHistoricoComandas({ de, ate, q: q.trim() }))
+      setDados(await getHistoricoComandas({ de, ate, q: q.trim(), origem }))
     } catch (e) {
       setErro(e.message)
     } finally {
       setCarregando(false)
     }
-  }, [de, ate, q])
+  }, [de, ate, q, origem])
 
   useEffect(() => {
     const t = setTimeout(carregar, 250)
@@ -133,7 +169,7 @@ export default function Historico() {
     <div className="history-page">
       <h1 className="mb-1 text-xl font-bold text-[var(--ink)]">Histórico de comandas</h1>
       <p className="mb-4 text-sm text-[var(--muted)]">
-        Todas as comandas já cobradas, para consultar quando quiser. Toque em uma linha para ver os itens e como foi pago.
+        Comandas do salão já cobradas e pedidos online e do iFood de dias anteriores. Toque em uma linha para ver os itens e como foi pago.
       </p>
 
       <div className="history-filters">
@@ -146,8 +182,13 @@ export default function Historico() {
             </button>
           ))}
         </div>
+        <label>Origem
+          <select value={origem} onChange={(e) => setOrigem(e.target.value)}>
+            {ORIGENS.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+          </select>
+        </label>
         <label className="history-search">Buscar
-          <input type="search" placeholder="Número, mesa, garçom ou cliente" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input type="search" placeholder="Número, mesa, garçom, cliente ou telefone" value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
       </div>
 
@@ -155,7 +196,7 @@ export default function Historico() {
 
       {dados && (
         <p className="history-summary">
-          <b>{dados.quantidade}</b> comanda(s) · total <b>{dinheiro(dados.total)}</b>
+          <b>{dados.quantidade}</b> registro(s) · total recebido <b>{dinheiro(dados.total)}</b>
           {carregando ? ' · atualizando…' : ''}
         </p>
       )}
@@ -168,18 +209,24 @@ export default function Historico() {
         <div className="history-list" role="list">
           {dados.comandas.map((c) => (
             <button key={c.session_key} type="button" role="listitem" className="history-row" onClick={() => setAberta(c.session_key)}>
-              <span className="history-number">{String(c.comanda_id).padStart(2, '0')}</span>
+              <span className={`history-number ${c.origem !== 'salao' ? 'is-online' : ''}`}>{c.numero}</span>
               <span className="history-main">
                 <strong>{c.cliente_nome || (c.mesa ? `Mesa ${c.mesa}` : 'Comanda')}</strong>
                 <small>
-                  {c.mesa && c.cliente_nome ? `Mesa ${c.mesa} · ` : ''}
-                  {c.garcom || '(Sem garçom)'}
-                  {c.pessoas ? ` · ${c.pessoas} pessoa(s)` : ''}
+                  {c.origem === 'salao' ? (
+                    <>
+                      {c.mesa && c.cliente_nome ? `Mesa ${c.mesa} · ` : ''}
+                      {c.garcom || '(Sem garçom)'}
+                      {c.pessoas ? ` · ${c.pessoas} pessoa(s)` : ''}
+                    </>
+                  ) : (
+                    <>{c.canal}{c.telefone ? ` · ${c.telefone}` : ''}</>
+                  )}
                 </small>
               </span>
               <span className="history-when">{quando(c.ultimo_pagamento)}</span>
-              <span className={`history-status is-${c.situacao}`}>{SITUACAO[c.situacao] || c.situacao}</span>
-              <b className="history-amount">{dinheiro(c.total)}</b>
+              <span className={`history-status is-${c.situacao}`}>{textoSituacao(c)}</span>
+              <b className={`history-amount ${c.conta_no_total ? '' : 'is-muted'}`}>{dinheiro(c.total)}</b>
             </button>
           ))}
         </div>

@@ -47,6 +47,7 @@ historicoRouter.get('/', (req, res) => {
     ? String(req.query.from)
     : db.prepare("SELECT date(?, '-6 day') AS d").get(to).d;
   const q = String(req.query.q || '').trim().toLowerCase();
+  const origem = ['salao', 'online', 'ifood'].includes(String(req.query.origem)) ? String(req.query.origem) : 'todas';
   const limite = Math.min(500, Math.max(1, Number(req.query.limit) || 200));
 
   const rows = db
@@ -71,6 +72,9 @@ historicoRouter.get('/', (req, res) => {
   let lista = rows.map((r) => {
     const info = dadosDaSessao(db, r.session_key);
     return {
+      origem: 'salao',
+      canal: 'Salão',
+      conta: r.session_key,
       session_key: r.session_key,
       comanda_id: r.comanda_id,
       mesa: r.mesa || info.comanda?.mesa || null,
@@ -85,18 +89,93 @@ historicoRouter.get('/', (req, res) => {
     };
   });
 
+  // Pedidos online e do iFood: entram pelo dia em que foram feitos (a tela de pedidos online mostra so os de hoje).
+  const pedidos = db
+    .prepare(
+      `SELECT id, tipo, status, cliente_nome, cliente_telefone, valor_total, forma_pagamento, origem, external_ref,
+              created_at, COALESCE(delivered_at, updated_at) AS concluido_em
+         FROM orders
+        WHERE substr(created_at, 1, 10) BETWEEN ? AND ?
+        ORDER BY created_at DESC
+        LIMIT 1000`,
+    )
+    .all(from, to);
+  const STATUS_ONLINE = { aguardando_pagamento: 'Aguardando pagamento', recebido: 'Recebido', em_producao: 'Em produção', pronto: 'Pronto', saiu_entrega: 'Saiu p/ entrega', entregue: 'Entregue', cancelado: 'Cancelado' };
+  for (const o of pedidos) {
+    const ifood = o.origem === 'ifood';
+    lista.push({
+      origem: ifood ? 'ifood' : 'online',
+      canal: ifood ? 'iFood' : o.tipo === 'retirada' ? 'Retirada' : 'Delivery',
+      conta: `pedido-${o.id}`,
+      session_key: `pedido-${o.id}`,
+      comanda_id: null,
+      numero: ifood && o.external_ref ? `#${o.external_ref}` : `#${o.id}`,
+      mesa: null,
+      garcom: null,
+      pessoas: 0,
+      cliente_nome: o.cliente_nome,
+      situacao: o.status,
+      situacao_texto: STATUS_ONLINE[o.status] || o.status,
+      primeiro_pagamento: o.created_at,
+      ultimo_pagamento: o.concluido_em || o.created_at,
+      total: Number(o.valor_total) || 0,
+      conta_no_total: o.status === 'entregue',
+      recebimentos: 1,
+      telefone: o.cliente_telefone,
+      forma_pagamento: o.forma_pagamento,
+    });
+  }
+  for (const r of lista) {
+    if (r.origem === 'salao') { r.conta_no_total = true; r.numero = String(r.comanda_id).padStart(2, '0'); }
+  }
+  lista.sort((a, b) => String(b.ultimo_pagamento).localeCompare(String(a.ultimo_pagamento)));
+  if (origem !== 'todas') lista = lista.filter((r) => r.origem === origem);
+
   if (q) {
     lista = lista.filter((r) =>
-      [r.comanda_id, r.mesa, r.garcom, r.cliente_nome].some((v) => String(v ?? '').toLowerCase().includes(q)),
+      [r.comanda_id, r.numero, r.mesa, r.garcom, r.cliente_nome, r.telefone].some((v) => String(v ?? '').toLowerCase().includes(q)),
     );
   }
-  const total = lista.reduce((s, r) => s + r.total, 0);
+  const total = lista.filter((r) => r.conta_no_total).reduce((s, r) => s + r.total, 0);
   res.json({ de: from, ate: to, quantidade: lista.length, total, comandas: lista.slice(0, limite) });
 });
 
 historicoRouter.get('/:sessionKey', (req, res) => {
   const db = getDb(req);
   const key = String(req.params.sessionKey);
+  const m = /^pedido-(\d+)$/.exec(key);
+  if (m) {
+    const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(Number(m[1]));
+    if (!o) return res.status(404).json({ error: 'Pedido não encontrado no histórico.' });
+    const itens = db
+      .prepare('SELECT oi.*, i.name AS item_name FROM order_items oi JOIN items i ON i.id = oi.item_id WHERE oi.order_id = ? ORDER BY oi.id')
+      .all(o.id)
+      .map((i) => ({ nome: i.item_name, quantidade: i.quantity, unitario: Number(i.unit_price) || 0, observacao: i.observations || null }));
+    const subtotal = itens.reduce((n, i) => n + i.unitario * i.quantidade, 0);
+    const ifood = o.origem === 'ifood';
+    const endereco = [o.endereco_rua, o.endereco_numero, o.endereco_complemento, o.endereco_bairro].filter(Boolean).join(', ');
+    return res.json({
+      tipo_registro: 'online',
+      session_key: key,
+      origem: ifood ? 'ifood' : 'online',
+      canal: ifood ? 'iFood' : o.tipo === 'retirada' ? 'Retirada' : 'Delivery',
+      numero: ifood && o.external_ref ? `#${o.external_ref}` : `#${o.id}`,
+      situacao: o.status,
+      cliente_nome: o.cliente_nome,
+      cliente_telefone: o.cliente_telefone,
+      endereco: endereco || null,
+      observacao: o.observacoes || null,
+      motivo_cancelamento: o.motivo_cancelamento || null,
+      forma_pagamento: o.forma_pagamento || null,
+      pagamento_status: o.payment_status || null,
+      criado_em: o.created_at,
+      concluido_em: o.delivered_at || o.updated_at,
+      itens,
+      subtotal,
+      entrega_e_ajustes: Math.round(((Number(o.valor_total) || 0) - subtotal) * 100) / 100,
+      total: Number(o.valor_total) || 0,
+    });
+  }
   // Sessões agrupadas (juntar comandas) pagam na sessão destino; as de origem ficam ligadas a ela.
   const sessoes = [
     key,

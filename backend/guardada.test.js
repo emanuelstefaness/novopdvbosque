@@ -13,6 +13,7 @@ const { comandasRouter } = await import("./routes/comandas.js");
 const { historicoRouter } = await import("./routes/historico.js");
 const { pedidosRouter } = await import("./routes/pedidos.js");
 const { cashRouter, initCash } = await import("./routes/cash.js");
+const { ordersRouter } = await import("./routes/orders.js");
 initDb();
 initCash(db);
 
@@ -24,6 +25,7 @@ app.use("/comandas", comandasRouter);
 app.use("/pedidos", pedidosRouter);
 app.use("/historico", historicoRouter);
 app.use("/cash", cashRouter);
+app.use("/orders", ordersRouter);
 const server = app.listen(0, "127.0.0.1");
 await new Promise((r) => server.once("listening", r));
 const url = `http://127.0.0.1:${server.address().port}`;
@@ -136,4 +138,40 @@ test("6. Filtros do histórico: busca e período", async () => {
   assert.equal((await call("/historico?q=zzz")).data.quantidade, 0);
   assert.equal((await call("/historico?from=2001-01-01&to=2001-01-31")).data.quantidade, 0);
   assert.equal((await call("/historico/inexistente")).status, 404);
+});
+
+test("7. Pedidos online: a tela mostra só os de hoje (a partir das 00:00); os anteriores vão para o histórico", async () => {
+  const ins = db.prepare(`INSERT INTO orders(tipo,status,cliente_nome,cliente_telefone,valor_total,forma_pagamento,origem,external_ref,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,datetime('now','localtime', ?),datetime('now','localtime', ?))`);
+  const ontem = Number(ins.run("delivery", "entregue", "Cliente de Ontem", "42999990001", 80, "pix", "proprio", null, "-1 day", "-1 day").lastInsertRowid);
+  const ontemIfood = Number(ins.run("delivery", "entregue", "Ana iFood", "42999990002", 50, "ifood", "ifood", "4821", "-1 day", "-1 day").lastInsertRowid);
+  const ontemCancelado = Number(ins.run("retirada", "cancelado", "Cancelou Ontem", "42999990003", 30, "pix", "proprio", null, "-1 day", "-1 day").lastInsertRowid);
+  const hojeId = Number(ins.run("delivery", "recebido", "Cliente de Hoje", "42999990004", 60, "pix", "proprio", null, "+0 seconds", "+0 seconds").lastInsertRowid);
+
+  const tela = (await call("/orders")).data.map((o) => o.id);
+  assert.ok(tela.includes(hojeId), "o pedido de hoje fica na tela");
+  for (const id of [ontem, ontemIfood, ontemCancelado]) assert.ok(!tela.includes(id), "pedido de ontem sai da tela");
+  assert.ok((await call("/orders?dia=todos")).data.some((o) => o.id === ontem), "dia=todos devolve tudo");
+
+  const de = db.prepare("SELECT date('now','localtime','-1 day') d").get().d;
+  const ate = db.prepare("SELECT date('now','localtime') d").get().d;
+  const periodo = `from=${de}&to=${ate}`;
+  const hist = (await call(`/historico?${periodo}`)).data;
+  const por = Object.fromEntries(hist.comandas.filter((c) => c.session_key.startsWith("pedido-")).map((c) => [c.session_key, c]));
+  assert.equal(por[`pedido-${ontem}`].origem, "online");
+  assert.equal(por[`pedido-${ontem}`].canal, "Delivery");
+  assert.equal(por[`pedido-${ontemIfood}`].origem, "ifood");
+  assert.equal(por[`pedido-${ontemIfood}`].numero, "#4821");
+  assert.equal(por[`pedido-${ontemCancelado}`].situacao, "cancelado");
+
+  const soIfood = (await call(`/historico?${periodo}&origem=ifood`)).data;
+  assert.deepEqual(soIfood.comandas.map((c) => c.origem), ["ifood"]);
+  const soOnline = (await call(`/historico?${periodo}&origem=online&q=ontem`)).data;
+  assert.equal(soOnline.quantidade, 2, "busca por nome");
+  assert.equal(soOnline.total, 80, "só pedido entregue entra no total; cancelado não");
+
+  const det = (await call(`/historico/pedido-${ontem}`)).data;
+  assert.equal(det.cliente_nome, "Cliente de Ontem");
+  assert.equal(det.total, 80);
+  assert.equal((await call("/historico/pedido-99999")).status, 404);
 });
