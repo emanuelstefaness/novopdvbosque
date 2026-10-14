@@ -137,8 +137,8 @@ export function archiveAndReset(db, id) {
       // A closed snapshot owns unfinished production independently of a reusable number.
       const snapshotId=db.prepare('SELECT MAX(200,COALESCE(MAX(id),200))+1 AS id FROM comandas').get().id;
       const mesa=comanda.mesa || db.prepare('SELECT mesa FROM sales WHERE session_key=? ORDER BY id DESC LIMIT 1').get(comanda.session_key)?.mesa;
-      const snapshot = db.prepare(`INSERT INTO comandas(id,mesa,status,waiter_id,session_key,production_number,closed_at)
-        VALUES (?,?,'closed',?,?,?,?)`).run(snapshotId,mesa,comanda.waiter_id,comanda.session_key,comanda.production_number || id,comanda.closed_at);
+      const snapshot = db.prepare(`INSERT INTO comandas(id,mesa,status,waiter_id,session_key,production_number,closed_at,cliente_nome,cliente_telefone)
+        VALUES (?,?,'closed',?,?,?,?,?,?)`).run(snapshotId,mesa,comanda.waiter_id,comanda.session_key,comanda.production_number || id,comanda.closed_at,comanda.cliente_nome ?? null,comanda.cliente_telefone ?? null);
       for(const p of pending) db.prepare('UPDATE pedidos SET comanda_id=? WHERE id=?').run(snapshot.lastInsertRowid,p.id);
     }
     db.prepare(
@@ -151,6 +151,7 @@ export function archiveAndReset(db, id) {
   }
   db.prepare(
     `UPDATE comandas SET people_count=0,service_tax_percent=0,client_cpf=NULL,closed_at=NULL,session_key=?,
+    cliente_nome=NULL,cliente_telefone=NULL,observation=NULL,locked=0,guardada_em=NULL,guardada_por=NULL,
     created_at=datetime('now','localtime') WHERE id=?`,
   ).run(randomUUID(), id);
 }

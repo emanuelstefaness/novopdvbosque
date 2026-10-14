@@ -14,6 +14,7 @@ const Admin = lazy(() => import("./pages/Admin"));
 const Financeiro = lazy(() => import("./pages/Financeiro"));
 const Cardapio = lazy(() => import("./pages/Cardapio"));
 const ItensIfood = lazy(() => import("./pages/ItensIfood"));
+const Historico = lazy(() => import("./pages/Historico"));
 const TvChurrasqueira = lazy(() => import("./pages/TvChurrasqueira"));
 const TvCozinha = lazy(() => import("./pages/TvCozinha"));
 const TvBar = lazy(() => import("./pages/TvBar"));
@@ -111,6 +112,14 @@ function App() {
           element={
             <SemAcessoGarcom>
               <Cardapio />
+            </SemAcessoGarcom>
+          }
+        />
+        <Route
+          path="/historico"
+          element={
+            <SemAcessoGarcom>
+              <Historico />
             </SemAcessoGarcom>
           }
         />

@@ -162,6 +162,9 @@ comandasRouter.post('/:id/open', (req, res) => {
     if (!mesaStr) return res.status(400).json({ error: 'Número da mesa é obrigatório' });
     const wid = waiter_id != null ? Number(waiter_id) : (req.user?.id ?? null);
     const existing = db.prepare('SELECT * FROM comandas WHERE id = ?').get(id);
+    if (existing && String(existing.status).toLowerCase() === 'guardada') {
+      return res.status(400).json({ error: `Comanda ${id} está guardada${existing.cliente_nome ? ' para ' + existing.cliente_nome : ''} e ainda não foi paga. Use outro número.` });
+    }
     const jaEmAndamento = existing && isEmAndamentoStatus(existing.status);
 
     const run = db.transaction(() => {
@@ -232,6 +235,50 @@ comandasRouter.patch('/:id', (req, res) => {
     console.error('Erro ao atualizar comanda:', err);
     return res.status(500).json({ error: err.message || 'Erro ao atualizar comanda' });
   }
+});
+
+// Guardar a comanda: o cliente paga depois. Mantém número, itens e produção; sai da fila de pagamento e fica bloqueada para novos lançamentos.
+comandasRouter.post('/:id/guardar', (req, res) => {
+  try {
+    const db = getDb(req);
+    const id = Number(req.params.id);
+    const c = db.prepare('SELECT * FROM comandas WHERE id = ?').get(id);
+    if (!c) return res.status(404).json({ error: 'Comanda não encontrada' });
+    if (c.origin_order_id || c.production_number || id < 1 || id > 200) {
+      return res.status(400).json({ error: 'Só comandas do salão podem ser guardadas.' });
+    }
+    if (!isOpen(c)) return res.status(400).json({ error: 'A comanda precisa estar aberta para ser guardada.' });
+    const nome = String(req.body?.cliente_nome || '').trim().slice(0, 80);
+    if (nome.length < 2) return res.status(400).json({ error: 'Informe o nome de quem vai pagar depois.' });
+    const telefone = String(req.body?.cliente_telefone || '').replace(/\D/g, '').slice(0, 15) || null;
+    const obs = String(req.body?.observacao || '').trim().slice(0, 300);
+    const saldo = summaryFor(db, id);
+    if (!saldo.pedidos.length) return res.status(400).json({ error: 'Não há itens a pagar nesta comanda.' });
+    db.prepare(`
+      UPDATE comandas
+         SET status = 'guardada', locked = 1, cliente_nome = ?, cliente_telefone = ?,
+             observation = COALESCE(NULLIF(?, ''), observation),
+             guardada_em = datetime('now','localtime'), guardada_por = ?, updated_at = datetime('now','localtime')
+       WHERE id = ?
+    `).run(nome, telefone, obs, req.user?.name || 'Caixa', id);
+    broadcastAll('comandas', {});
+    res.json({ id, status: 'guardada', cliente_nome: nome, saldo: saldo.total });
+  } catch (err) {
+    console.error('Erro ao guardar comanda:', err);
+    res.status(500).json({ error: err.message || 'Erro ao guardar comanda' });
+  }
+});
+
+// Retomar uma comanda guardada: volta ao atendimento (desbloqueada).
+comandasRouter.post('/:id/retomar', (req, res) => {
+  const db = getDb(req);
+  const id = Number(req.params.id);
+  const c = db.prepare('SELECT * FROM comandas WHERE id = ?').get(id);
+  if (!c) return res.status(404).json({ error: 'Comanda não encontrada' });
+  if (String(c.status).toLowerCase() !== 'guardada') return res.status(400).json({ error: 'Esta comanda não está guardada.' });
+  db.prepare("UPDATE comandas SET status = 'ordering', locked = 0, guardada_em = NULL, guardada_por = NULL, updated_at = datetime('now','localtime') WHERE id = ?").run(id);
+  broadcastAll('comandas', {});
+  res.json({ id, status: 'ordering' });
 });
 
 comandasRouter.get('/:id/summary', (req,res) => {

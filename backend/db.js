@@ -462,6 +462,15 @@ export function initDb() {
     console.warn('Migração Churraspão de coração:', e.message);
   }
 
+  // Conta guardada: o cliente paga depois. A comanda mantém o número (e a produção segue normal); só sai da fila de pagamento.
+  for (const col of ['guardada_em TEXT', 'guardada_por TEXT']) {
+    try {
+      db.exec(`ALTER TABLE comandas ADD COLUMN ${col}`);
+    } catch (e) {
+      if (!e.message || !e.message.includes('duplicate column')) throw e;
+    }
+  }
+
   // Itens do iFood (de-para inicial): nome no catálogo do iFood → item do PDV (define o setor e entra na contagem)
   try {
     const norm = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();

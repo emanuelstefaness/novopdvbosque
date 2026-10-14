@@ -511,3 +511,37 @@ export async function salvarIfoodMapa(payload) {
   if (!r.ok) throw new Error(d.error || 'Não foi possível salvar a ligação');
   return d;
 }
+
+export async function guardarComanda(id, dados) {
+  const r = await apiFetch(`${API}/api/comandas/${id}/guardar`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Não foi possível guardar a comanda');
+  return d;
+}
+
+export async function retomarComanda(id) {
+  const r = await apiFetch(`${API}/api/comandas/${id}/retomar`, { method: 'POST' });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Não foi possível retomar a comanda');
+  return d;
+}
+
+export async function getHistoricoComandas({ de, ate, q } = {}) {
+  const p = new URLSearchParams();
+  if (de) p.set('from', de);
+  if (ate) p.set('to', ate);
+  if (q) p.set('q', q);
+  const r = await apiFetch(`${API}/api/historico?${p}`);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Falha ao carregar o histórico');
+  return d;
+}
+
+export async function getHistoricoComanda(sessionKey) {
+  const r = await apiFetch(`${API}/api/historico/${encodeURIComponent(sessionKey)}`);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'Falha ao carregar a comanda');
+  return d;
+}

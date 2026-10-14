@@ -4,6 +4,7 @@ import { getComandas, openComanda } from "../api";
 import { useSocket } from "../socket";
 import {useWaiter} from "../context/useWaiter";
 import Icon from "../components/Icon";
+const guardada = (c) => c && String(c.status).toLowerCase() === "guardada";
 const open = (c) =>
   c && !c.closed_at && ["open", "ordering", "paying"].includes(c.status);
 const labels = {
@@ -50,6 +51,10 @@ export default function Garcons() {
     ),
     active = all.filter(open);
   const choose = (c) => {
+    if (guardada(c)) {
+      setError(`Comanda ${c.id} está guardada${c.cliente_nome ? " para " + c.cliente_nome : ""} e aguarda pagamento no caixa.`);
+      return;
+    }
     if (open(c)) {
       navigate(`/garcons/${c.id}/pedidos`);
       return;
@@ -176,7 +181,7 @@ export default function Garcons() {
               </div>
               <div className="tile-number">{String(c.id).padStart(2, "0")}</div>
               <div className="tile-bottom">
-                <span>{open(c) ? `Mesa ${c.mesa}` : "Abrir atendimento"}</span>
+                <span>{guardada(c) ? `Guardada${c.cliente_nome ? " · " + c.cliente_nome : ""}` : open(c) ? `Mesa ${c.mesa}` : "Abrir atendimento"}</span>
                 {open(c) ? (
                   <strong>
                     {Number(c.total_pedidos || 0).toLocaleString("pt-BR", {

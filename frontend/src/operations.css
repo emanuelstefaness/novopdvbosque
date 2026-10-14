@@ -1220,3 +1220,62 @@
 .account-modal-main .account-scroll-body{flex:1;overflow-y:auto;display:flex;flex-direction:column}
 @media(max-width:760px){.account-modal-columns{flex-direction:column}.account-modal-sidebar{width:100%;border-right:0;border-bottom:1px solid #3c4549}.account-modal-topbar{padding-right:50px}}
 @media(max-width:600px){.cash-grid-toolbar{flex-wrap:wrap;gap:12px}.cash-grid-toolbar .register-search{width:100%}.cash-comandas-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.pdv-app .cash-comanda{padding:13px;min-height:120px}.cash-comandas-grid.free-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.account-modal-backdrop{padding:10px}.account-modal{max-height:calc(100dvh - 20px)}.account-modal-close.icon-button{right:8px;top:10px}.account-modal .register-options summary{font-size:10px}.cash-comanda-bottom{font-size:10px}}
+
+/* ===== Histórico de comandas e contas guardadas ===== */
+.history-page { max-width: 1100px; }
+.history-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; margin-bottom: 14px; }
+.history-filters label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted, #98a2b3); }
+.history-filters input { min-height: 40px; padding: 0 10px; border: 1px solid var(--line, #2b3036); border-radius: 8px; background: var(--surface, #1a1d21); color: var(--ink, #eef1f6); font-size: 14px; }
+.history-search { flex: 1 1 240px; }
+.history-shortcuts { display: flex; gap: 6px; flex-wrap: wrap; }
+.history-summary { margin: 0 0 10px; color: var(--muted, #98a2b3); font-size: 14px; }
+.history-summary b { color: var(--ink, #eef1f6); }
+.history-list { display: grid; gap: 8px; }
+.history-row {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px;
+  width: 100%; padding: 10px 14px; text-align: left; cursor: pointer;
+  border: 1px solid var(--line, #2b3036); border-radius: 10px; background: var(--surface, #1a1d21); color: var(--ink, #eef1f6);
+}
+.history-row:hover { border-color: #4a5566; }
+.history-number { display: grid; place-items: center; height: 40px; border-radius: 8px; background: #222a35; font-weight: 800; font-variant-numeric: tabular-nums; }
+.history-main { display: grid; min-width: 0; }
+.history-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-main small, .history-when { color: var(--muted, #98a2b3); font-size: 12px; }
+.history-amount { font-variant-numeric: tabular-nums; }
+.history-status { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid var(--line, #2b3036); color: var(--muted, #98a2b3); }
+.history-status.is-fechada { color: #35d67c; border-color: rgba(53, 214, 124, 0.45); }
+.history-status.is-guardada { color: #43a5f5; border-color: rgba(67, 165, 245, 0.5); }
+.history-status.is-aberta { color: #ff9f43; border-color: rgba(255, 159, 67, 0.5); }
+@media (max-width: 720px) {
+  .history-row { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .history-when, .history-status { display: none; }
+}
+
+.held-modal {
+  position: relative; width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto;
+  display: grid; gap: 12px; padding: 20px; border-radius: 14px;
+  border: 1px solid var(--line, #2b3036); background: var(--surface, #1a1d21); color: var(--ink, #eef1f6);
+}
+.held-modal h2 { margin: 0; font-size: 18px; }
+.held-modal h3 { margin: 6px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted, #98a2b3); }
+.held-modal p { margin: 0; color: var(--muted, #98a2b3); font-size: 14px; }
+.held-modal label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted, #98a2b3); }
+.held-modal input { min-height: 42px; padding: 0 10px; border: 1px solid var(--line, #2b3036); border-radius: 8px; background: #11151a; color: var(--ink, #eef1f6); font-size: 15px; }
+.held-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.history-detail { width: min(720px, calc(100vw - 32px)); }
+.history-detail .account-modal-close { position: absolute; top: 10px; right: 10px; }
+.history-meta { font-size: 13px; }
+.history-obs { color: #ffe2a1; }
+.history-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.history-table th, .history-table td { padding: 6px 4px; border-bottom: 1px solid var(--line, #2b3036); text-align: left; }
+.history-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.history-totals { display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: flex-end; font-size: 14px; }
+.history-total { font-size: 16px; }
+.history-payments { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.history-payments li { display: grid; grid-template-columns: 1fr auto auto; gap: 4px 12px; padding: 8px 10px; border: 1px solid var(--line, #2b3036); border-radius: 8px; font-size: 14px; }
+.history-payments small { grid-column: 1 / -1; color: var(--muted, #98a2b3); }
+
+.cash-held-section > header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.cash-held-section > header p { margin: 0; font-size: 13px; color: var(--muted, #98a2b3); }
+.cash-comanda.held { border-color: rgba(67, 165, 245, 0.55); }
+.cash-comanda.held .cash-comanda-status { color: #43a5f5; }

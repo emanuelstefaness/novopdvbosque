@@ -22,6 +22,7 @@ import { financeRouter } from './routes/finance.js';
 import { cashRouter,initCash } from './routes/cash.js';
 import { onlineRouter } from './routes/online.js';
 import { ifoodRouter } from './routes/ifood.js';
+import { historicoRouter } from './routes/historico.js';
 import { ifoodConfigurado, criarClienteIfood, iniciarPollingIfood } from './ifood.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -94,6 +95,7 @@ app.use('/api/finance', financeRouter);
 app.use('/api/cash', cashRouter);
 app.use('/api/online', onlineRouter);
 app.use('/api/ifood', ifoodRouter);
+app.use('/api/historico', historicoRouter);
 
 
 io.on('connection', (socket) => {

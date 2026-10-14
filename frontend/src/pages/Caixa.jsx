@@ -14,6 +14,8 @@ import {
   openComanda,
   updatePedido,
   deletePedido,
+  guardarComanda,
+  retomarComanda,
 } from "../api";
 import { useSocket } from "../socket";
 import {
@@ -42,6 +44,7 @@ function statusLabel(st) {
   if (s === "paying") return "Pagamento";
   if (s === "ordering") return "Pedindo";
   if (s === "open") return "Aberta";
+  if (s === "guardada") return "Guardada";
   return s;
 }
 
@@ -85,6 +88,7 @@ export default function Caixa() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [editGroupModal, setEditGroupModal] = useState(null);
   const [obsDraft, setObsDraft] = useState("");
+  const [guardarForm, setGuardarForm] = useState(null); // null | { nome, telefone, obs, saving }
   const cpfInputRef = useRef(null);
   useEffect(() => {
     setObsDraft(summary?.comanda?.observation || "");
@@ -195,9 +199,22 @@ export default function Caixa() {
   const livresIds = useMemo(() => {
     const set = new Set(emAndamentoIds);
     const out = [];
-    for (let i = 1; i <= 200; i++) if (!set.has(i)) out.push(i);
+    for (let i = 1; i <= 200; i++) {
+      if (set.has(i)) continue;
+      if (String(comandas[i]?.status || "").toLowerCase() === "guardada") continue; // número reservado até pagar
+      out.push(i);
+    }
     return out;
-  }, [emAndamentoIds]);
+  }, [emAndamentoIds, comandas]);
+
+  const guardadasIds = useMemo(
+    () =>
+      Object.values(comandas)
+        .filter((c) => String(c?.status || "").toLowerCase() === "guardada")
+        .sort((a, b) => String(a.guardada_em || "").localeCompare(String(b.guardada_em || "")))
+        .map((c) => c.id),
+    [comandas],
+  );
 
   const comandasAbertas = useMemo(
     () => emAndamentoIds.map((id) => [String(id), comandas[id]]),
@@ -240,6 +257,43 @@ export default function Caixa() {
   };
 
   const registrarPago = () => setPaymentOpen(true);
+
+  const abrirGuardar = () => {
+    if (!summary) return;
+    setCaixaError("");
+    setGuardarForm({ nome: summary.comanda.cliente_nome || "", telefone: summary.comanda.cliente_telefone || "", obs: "", saving: false });
+  };
+
+  const confirmarGuardar = async (e) => {
+    e.preventDefault();
+    if (!summary || !guardarForm || guardarForm.saving) return;
+    const nome = guardarForm.nome.trim();
+    if (nome.length < 2) { setCaixaError("Informe o nome de quem vai pagar depois."); return; }
+    setGuardarForm((f) => ({ ...f, saving: true }));
+    try {
+      const id = summary.comanda.id;
+      await guardarComanda(id, { cliente_nome: nome, cliente_telefone: guardarForm.telefone, observacao: guardarForm.obs });
+      setGuardarForm(null);
+      setSummary(null);
+      setFeedback(`Comanda ${id} guardada para ${nome}. Ela continua reservada até o pagamento.`);
+      await load();
+    } catch (err) {
+      setCaixaError(err.message || "Não foi possível guardar a comanda.");
+      setGuardarForm((f) => (f ? { ...f, saving: false } : f));
+    }
+  };
+
+  const retomar = async () => {
+    if (!summary) return;
+    try {
+      await retomarComanda(summary.comanda.id);
+      setFeedback(`Comanda ${summary.comanda.id} voltou para o atendimento.`);
+      await refreshSummary();
+      await load();
+    } catch (err) {
+      setCaixaError(err.message || "Não foi possível retomar a comanda.");
+    }
+  };
 
   const setCPF = async (cpf) => {
     if (!summary) return;
@@ -620,6 +674,23 @@ export default function Caixa() {
       {feedback&&<p className="operation-feedback" role="status">{feedback}</p>}
       {search && !emAndamentoIds.some(id=>String(id).includes(search)||String(comandas[id]?.mesa||" ").includes(search)) && !livresIds.some(id=>String(id).includes(search)) && <p className="empty-panel">Nenhuma comanda encontrada. <button className="text-action" onClick={()=>setSearch("")}>Limpar busca</button></p>}
       <div className="cash-grid-toolbar"><label className="register-search"><Icon name="search" size={17}/><input placeholder="Buscar mesa ou comanda · F2" aria-label="Buscar mesa ou comanda" value={search} onChange={e=>setSearch(e.target.value)}/></label><label><input type="checkbox" checked={onlyPaying} onChange={e=>setOnlyPaying(e.target.checked)}/> Aguardando pagamento</label><div className="cash-grid-legend"><span><i className="just-opened"/>Aberta</span><span><i className="occupied"/>Pedindo</span><span><i className="awaiting"/>Pagamento</span><span><i className="available"/>Livre</span></div></div>
+      {guardadasIds.length > 0 && (
+        <section className="cash-grid-section cash-held-section" aria-labelledby="cash-held-title">
+          <header><h2 id="cash-held-title">Contas guardadas <span>{guardadasIds.length}</span></h2><p>Aguardando pagamento do cliente</p></header>
+          <div className="cash-comandas-grid">
+            {guardadasIds.filter((id) => !search || String(id).includes(search) || String(comandas[id]?.cliente_nome || "").toLowerCase().includes(search.toLowerCase())).map((id) => {
+              const c = comandas[id];
+              return (
+                <button key={id} className="cash-comanda occupied held" onClick={() => void openSummary(id)} aria-label={"Abrir conta guardada da comanda " + id}>
+                  <span className="cash-comanda-status">Guardada</span>
+                  <strong className="cash-comanda-number">{String(id).padStart(2, "0")}</strong>
+                  <span className="cash-comanda-bottom"><span>{c.cliente_nome || "Sem nome"}</span><b>{cash(c.saldo ?? c.total_pedidos)}</b></span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
       <section className="cash-grid-section" aria-labelledby="cash-open-title"><header><h2 id="cash-open-title">Comandas abertas <span>{emAndamentoIds.length}</span></h2></header><div className="cash-comandas-grid">{emAndamentoIds.filter(id=>!onlyPaying||comandas[id]?.status==="paying").filter(id=>!search||String(id).includes(search)||String(comandas[id]?.mesa||'').includes(search)).map(id=>{const c=comandas[id];return <button key={id} className={'cash-comanda occupied '+(c.status==='paying'?'awaiting':c.status==='open'?'just-opened':'')} onClick={()=>void openSummary(id)} aria-label={'Abrir conta da comanda '+id}><span className="cash-comanda-status">{statusLabel(c.status)}</span><strong className="cash-comanda-number">{String(id).padStart(2,'0')}</strong><span className="cash-comanda-bottom"><span>Mesa {c.mesa}</span><b>{cash(c.saldo??c.total_pedidos)}</b></span></button>})}</div>{!emAndamentoIds.length&&<p className="cash-grid-empty">Nenhuma comanda aberta. Escolha uma livre abaixo para iniciar.</p>}</section>
       <section className="cash-grid-section cash-free-grid-section" aria-labelledby="cash-free-title"><header><h2 id="cash-free-title">Comandas livres <span>{livresIds.length}</span></h2></header><div className="cash-comandas-grid free-grid">{livresIds.filter(id=>!search||String(id).includes(search)).map(id=><button key={id} className="cash-comanda available" aria-label={'Abrir comanda livre '+id} onClick={()=>{setModal({type:'abrir',id});setMesaAbrir('');setCaixaError('')}}><strong className="cash-comanda-number">{String(id).padStart(2,'0')}</strong><span>Livre <Icon name="plus" size={13}/></span></button>)}</div></section>
       {summary&&<div className="account-modal-backdrop" onClick={e=>{if(e.target===e.currentTarget)setSummary(null)}}><section className="register-account-workspace account-modal" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
@@ -640,7 +711,7 @@ export default function Caixa() {
                   >
                     {statusLabel(summary.comanda.status)}
                   </span>
-                  <h2 id="account-modal-title">Pedido #{summary.comanda.id}</h2>
+                  <h2 id="account-modal-title">Pedido #{summary.comanda.id}{String(summary.comanda.status).toLowerCase() === "guardada" && summary.comanda.cliente_nome ? ` · ${summary.comanda.cliente_nome}` : ""}</h2>
                 </div>
                 <div className="account-modal-toolbar">
                   <label className="account-modal-search">
@@ -660,6 +731,15 @@ export default function Caixa() {
                     <Icon name="plus" size={16} />
                     Produtos
                   </button>
+                  {String(summary.comanda.status).toLowerCase() === "guardada" ? (
+                    <button type="button" className="btn btn-secondary" onClick={() => void retomar()}>
+                      Retomar atendimento
+                    </button>
+                  ) : summary.comanda.status !== "closed" && !summary.comanda.origin_order_id && summary.pedidos?.length > 0 ? (
+                    <button type="button" className="btn btn-secondary" onClick={abrirGuardar} title="Guardar a conta para o cliente pagar depois">
+                      Guardar conta
+                    </button>
+                  ) : null}
                 </div>
               </header>
               <div className="account-modal-columns">
@@ -913,6 +993,23 @@ export default function Caixa() {
       /></div>}
 
       {caixaError && <p className="text-sm text-[#d11d1d]">{caixaError}</p>}
+
+      {guardarForm && (
+        <div className="account-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget && !guardarForm.saving) setGuardarForm(null); }}>
+          <form className="held-modal" role="dialog" aria-modal="true" aria-labelledby="held-title" onSubmit={confirmarGuardar}>
+            <h2 id="held-title">Guardar conta para pagar depois</h2>
+            <p>A comanda {summary?.comanda?.id} continua reservada com os itens e o valor de {cash(summary?.total || 0)}. Fica bloqueada para novos pedidos até ser paga ou retomada.</p>
+            <label>Nome de quem vai pagar<input autoFocus value={guardarForm.nome} maxLength={80} onChange={(e) => setGuardarForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex.: João da Silva" /></label>
+            <label>Telefone (opcional)<input value={guardarForm.telefone} maxLength={20} inputMode="tel" onChange={(e) => setGuardarForm((f) => ({ ...f, telefone: e.target.value }))} placeholder="(42) 99999-9999" /></label>
+            <label>Observação (opcional)<input value={guardarForm.obs} maxLength={300} onChange={(e) => setGuardarForm((f) => ({ ...f, obs: e.target.value }))} placeholder="Ex.: paga na sexta" /></label>
+            {caixaError && <p className="error-banner" role="alert">{caixaError}</p>}
+            <div className="held-modal-actions">
+              <button type="button" className="btn btn-secondary" disabled={guardarForm.saving} onClick={() => setGuardarForm(null)}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={guardarForm.saving || guardarForm.nome.trim().length < 2}>{guardarForm.saving ? "Guardando…" : "Guardar conta"}</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {modal === "agrupar" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-[2px]">
