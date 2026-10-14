@@ -2,7 +2,7 @@
 export const TAXA_ENTREGA_PADRAO = 10;
 
 /** Promo ativa agora — entrega grátis. Desligue amanhã (`false`) para voltar à taxa normal. */
-export const PROMO_ENTREGA_GRATIS = true;
+export const PROMO_ENTREGA_GRATIS = false;
 
 /**
  * Taxa de entrega vigente (R$).

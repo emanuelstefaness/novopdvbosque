@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { getComandas, openComanda } from "../api";
 import { useSocket } from "../socket";
@@ -37,7 +37,13 @@ export default function Garcons() {
   useEffect(() => {
     void load();
   }, []);
-  useSocket(() => void load());
+  const recargaRef = useRef(null);
+  useEffect(() => () => { if (recargaRef.current) clearTimeout(recargaRef.current); }, []);
+  // Cada pedido lancado em qualquer mesa dispara este evento: junta varios em uma unica recarga
+  useSocket(() => {
+    if (recargaRef.current) clearTimeout(recargaRef.current);
+    recargaRef.current = setTimeout(() => { void load(); recargaRef.current = null; }, 400);
+  });
   const all = Array.from(
       { length: 200 },
       (_, i) => data[i + 1] || { id: i + 1, status: "closed" },

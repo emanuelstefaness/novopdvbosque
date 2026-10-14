@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getPedidosGrill } from '../api'
 import { useSocket } from '../socket'
 import { comandaOnlineLabel, comandaOrigemLabel, isTipoPedidoOnline, pedidoOnlineTvBannerModel, tvPedidoCardClass } from '../utils/comandaOnlineVisual'
@@ -13,7 +13,13 @@ export default function TvChurrasqueira() {
   }
 
   useEffect(() => { const initial=setTimeout(()=>void load(),0); return()=>clearTimeout(initial) }, [])
-  useSocket(() => load())
+  const recargaRef = useRef(null)
+  useEffect(() => () => { if (recargaRef.current) clearTimeout(recargaRef.current) }, [])
+  // Cada pedido lancado no restaurante dispara este evento: junta varios em uma unica recarga
+  useSocket(() => {
+    if (recargaRef.current) clearTimeout(recargaRef.current)
+    recargaRef.current = setTimeout(() => { void load(); recargaRef.current = null }, 350)
+  })
 
   return (
     <div className="min-h-screen bg-[#242a30] p-6">

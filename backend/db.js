@@ -338,8 +338,9 @@ export function initDb() {
   db.exec("UPDATE items SET internal_only = 1 WHERE lower(trim(name)) = 'couvert' AND COALESCE(internal_only, 0) = 0");
 
   // Bar: fila só para categorias do bar; remove status bar de itens fora da lista
+  // (roda so uma vez: varria toda a tabela pedidos a cada inicio do backend)
   const barSlugSql = sqlQuotedList(BAR_CATEGORY_SLUGS);
-  try {
+  if (!migrationApplied('bar_queue_cleanup_v1')) try {
     db.exec(`
       DELETE FROM pedido_sector_status
       WHERE sector = 'bar' AND pedido_id IN (
@@ -356,12 +357,13 @@ export function initDb() {
         WHERE cat.slug IS NULL OR cat.slug NOT IN (${barSlugSql})
       );
     `);
+    markMigrationApplied('bar_queue_cleanup_v1');
   } catch (e) {
     console.warn('Migração bar/categorias:', e.message);
   }
 
-  // Pedidos antigos (sodas, bebidas, etc.) sem sector: envia para a fila do bar
-  try {
+  // Pedidos antigos (sodas, bebidas, etc.) sem sector: envia para a fila do bar (so uma vez)
+  if (!migrationApplied('bar_queue_backfill_v1')) try {
     db.exec(`
       UPDATE pedidos SET sector = 'bar', updated_at = datetime('now','localtime')
       WHERE (sector IS NULL OR TRIM(COALESCE(sector, '')) = '')
@@ -382,6 +384,7 @@ export function initDb() {
       AND c.slug IN (${barSlugSql})
       AND NOT EXISTS (SELECT 1 FROM pedido_sector_status s WHERE s.pedido_id = p.id AND s.sector = 'bar');
     `);
+    markMigrationApplied('bar_queue_backfill_v1');
   } catch (e) {
     console.warn('Migração bar pedidos sem setor:', e.message);
   }
@@ -530,4 +533,18 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_finance_inc_bd ON finance_income_manual(business_date);
   `);
   initBilling(db);
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    key TEXT PRIMARY KEY,
+    applied_at TEXT DEFAULT (datetime('now','localtime'))
+  );
+`);
+
+function migrationApplied(key) {
+  return !!db.prepare('SELECT 1 FROM schema_migrations WHERE key = ?').get(key);
+}
+function markMigrationApplied(key) {
+  db.prepare('INSERT OR IGNORE INTO schema_migrations (key) VALUES (?)').run(key);
 }
