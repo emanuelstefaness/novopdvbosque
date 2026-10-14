@@ -11,13 +11,17 @@ ordersRouter.get('/', (req, res) => {
   const db = getDb(req);
   const { tipo, status, dia } = req.query;
   // Por padrao so os pedidos de hoje (a partir das 00:00). Os anteriores ficam no Historico de comandas.
+  // Excecao: ate 01:00, pedido de ontem que ainda nao foi entregue nem cancelado continua na tela (cliente ainda esperando).
   // `?dia=todos` devolve tudo (uso interno/relatorios).
   const soHoje = dia !== 'todos';
   let list = db.prepare(`
     SELECT o.*, c.id as comanda_id, c.mesa, c.status as comanda_status
     FROM orders o
     LEFT JOIN comandas c ON c.id = o.comanda_id
-    ${soHoje ? "WHERE substr(o.created_at, 1, 10) = date('now','localtime')" : ''}
+    ${soHoje ? `WHERE substr(o.created_at, 1, 10) = date('now','localtime')
+       OR (time('now','localtime') < '01:00:00'
+           AND substr(o.created_at, 1, 10) = date('now','localtime','-1 day')
+           AND o.status NOT IN ('entregue','cancelado'))` : ''}
     ORDER BY o.created_at DESC
   `).all();
   if (tipo && ['delivery', 'retirada'].includes(tipo)) {

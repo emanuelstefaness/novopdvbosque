@@ -89,13 +89,16 @@ export default function PedidosOnlineInterno() {
     void load();
     return () => clearTimeout(timer.current);
   }, []);
-  // Virada do dia (00:00): os pedidos de ontem saem desta tela e ficam no Histórico de comandas.
+  // Virada do dia: à 00:00 os pedidos de ontem já entregues/cancelados saem desta tela e ficam no Histórico de comandas;
+  // os que ainda estão em andamento ficam até 01:00. Recarrega nesses dois horários.
   useEffect(() => {
     let t;
     const agendar = () => {
       const agora = new Date();
-      const meiaNoite = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() + 1, 0, 0, 2);
-      t = setTimeout(() => { void load(); agendar(); }, meiaNoite - agora);
+      const a = agora.getFullYear(), m = agora.getMonth(), d = agora.getDate();
+      const marcos = [new Date(a, m, d, 0, 0, 2), new Date(a, m, d, 1, 0, 2), new Date(a, m, d + 1, 0, 0, 2)];
+      const proximo = marcos.find((x) => x > agora);
+      t = setTimeout(() => { void load(); agendar(); }, proximo - agora);
     };
     agendar();
     return () => clearTimeout(t);

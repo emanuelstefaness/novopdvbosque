@@ -175,3 +175,16 @@ test("7. Pedidos online: a tela mostra só os de hoje (a partir das 00:00); os a
   assert.equal(det.total, 80);
   assert.equal((await call("/historico/pedido-99999")).status, 404);
 });
+
+test("8. Até 01:00, pedido de ontem ainda em andamento continua na tela; depois disso sai", async () => {
+  const id = Number(
+    db
+      .prepare(`INSERT INTO orders(tipo,status,cliente_nome,cliente_telefone,valor_total,forma_pagamento,origem,created_at,updated_at)
+        VALUES ('delivery','em_producao','Pedido da Madrugada','42999990005',45,'pix','proprio',datetime('now','localtime','-1 day'),datetime('now','localtime','-1 day'))`)
+      .run().lastInsertRowid,
+  );
+  const antesDeUmaHora = !!db.prepare("SELECT time('now','localtime') < '01:00:00' AS v").get().v;
+  const naTela = (await call("/orders")).data.some((o) => o.id === id);
+  assert.equal(naTela, antesDeUmaHora, "em andamento fica na tela só até 01:00");
+  assert.ok((await call("/historico?from=2000-01-01&to=2100-01-01&origem=online&q=madrugada")).data.quantidade === 1, "e já aparece no histórico");
+});
