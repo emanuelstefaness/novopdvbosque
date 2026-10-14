@@ -18,3 +18,7 @@ backend/*.backup-*.db
 # copias do .env com credenciais
 backend/.env.*
 !backend/.env.example
+
+.vercel/
+.vercel
+.env*

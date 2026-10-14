@@ -1,0 +1,13 @@
+backend
+prints-homologacao-ifood
+supabase
+docs
+fotocardapio
+scripts
+*.bat
+*.md
+delivery-full-menu.png
+prototype-detail.png
+prototype-home.png
+qa-detail-comparison.png
+qa-home-comparison.png
